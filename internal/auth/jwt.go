@@ -15,7 +15,7 @@ type Claims struct {
 
 func CreateToken(jwtSecret string, userID string, email string, role string) (string, error) {
 	now := time.Now()
-	expiry := now.Add(time.Hour * 24 * 30)
+	expiry := now.Add(time.Hour * 24)
 
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
