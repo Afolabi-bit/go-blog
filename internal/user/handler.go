@@ -1,6 +1,7 @@
 package user
 
 import (
+	"blog-api/internal/response"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -28,7 +29,7 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully", "data": authResponse})
+	response.Success(c, http.StatusCreated, "User registered successfully", authResponse)
 }
 
 func (h *Handler) Login(c *gin.Context) {
@@ -41,9 +42,9 @@ func (h *Handler) Login(c *gin.Context) {
 
 	authResponse, err := h.svc.Login(c, input)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "User logged in successfully", "data": authResponse})
+	response.Success(c, http.StatusOK, "User logged in successfully", authResponse)
 }

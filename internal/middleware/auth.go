@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"blog-api/internal/auth"
+	"blog-api/internal/response"
 	"net/http"
 	"strings"
 
@@ -18,13 +19,15 @@ func AuthRequired(jwtSecret string) gin.HandlerFunc {
 		authHeader := c.GetHeader("Authorization")
 
 		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authorization header is required"})
+			response.Error(c, http.StatusUnauthorized, "invalid or missing authorization token")
+			c.Abort()
 			return
 		}
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header format. expected 'Bearer <token>"})
+			response.Error(c, http.StatusUnauthorized, "invalid or missing authorization token")
+			c.Abort()
 			return
 		}
 
@@ -32,18 +35,21 @@ func AuthRequired(jwtSecret string) gin.HandlerFunc {
 		tokenStr := parts[1]
 
 		if scheme != "bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header format. expected 'Bearer <token>"})
+			response.Error(c, http.StatusUnauthorized, "invalid or missing authorization token")
+			c.Abort()
 			return
 		}
 
 		if tokenStr == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token is required"})
+			response.Error(c, http.StatusUnauthorized, "invalid or missing authorization token")
+			c.Abort()
 			return
 		}
 
 		claims, err := auth.ParseToken(jwtSecret, tokenStr)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			response.Error(c, http.StatusUnauthorized, "invalid or missing authorization token")
+			c.Abort()
 			return
 		}
 
