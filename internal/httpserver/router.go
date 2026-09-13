@@ -1,6 +1,8 @@
 package httpserver
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-gonic/gin"
+)
 
 func NewRouter() *gin.Engine {
 	router := gin.New()
@@ -9,6 +11,8 @@ func NewRouter() *gin.Engine {
 	router.Use(gin.Recovery())
 
 	router.GET("/health", health)
+
+	router.Group("/auth")
 
 	return router
 }
