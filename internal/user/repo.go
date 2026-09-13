@@ -40,6 +40,28 @@ func (r *Repo) FindUserByEmail(ctx context.Context, email string) (User, error) 
 	return user, nil
 }
 
+func (r *Repo) FinduserByID(ctx context.Context, id string) (User, error) {
+	var user User
+
+	idObj, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return User{}, fmt.Errorf("Find user by ID failed: %v", err)
+	}
+
+	filter := bson.M{"_id": idObj}
+
+	err = r.collection.FindOne(ctx, filter).Decode(&user)
+
+	if err != nil {
+		if errors.Is(mongo.ErrNoDocuments, err) {
+			return User{}, mongo.ErrNoDocuments
+		}
+		return User{}, fmt.Errorf("find user by ID failed: %w", err)
+	}
+
+	return user, nil
+}
+
 func (r *Repo) CreateUser(ctx context.Context, user User) (User, error) {
 	res, err := r.collection.InsertOne(ctx, user)
 
