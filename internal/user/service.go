@@ -90,3 +90,41 @@ func (s *Service) Register(ctx context.Context, input RegisterRequest) (AuthResp
 		User:  ToPublic(createdUser),
 	}, nil
 }
+
+func (s *Service) Login(ctx context.Context, input LoginRequest) (AuthResponse, error) {
+	email := input.Email
+	password := input.Password
+
+	if email == "" {
+		return AuthResponse{}, fmt.Errorf("Email is required")
+	}
+
+	if password == "" {
+		return AuthResponse{}, fmt.Errorf("Password is required")
+	}
+
+	if len(password) < 6 {
+		return AuthResponse{}, fmt.Errorf("Password must be atleast 6 characters")
+	}
+
+	user, err := s.repo.FindUserByEmail(ctx, email)
+
+	if err != nil {
+		return AuthResponse{}, err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		return AuthResponse{}, errors.New("Invalid Credentials")
+	}
+
+	token, err := auth.CreateToken(s.jwtSecret, user.ID.Hex(), user.Email, user.Role)
+
+	if err != nil {
+		return AuthResponse{}, err
+	}
+
+	return AuthResponse{
+		Token: token,
+		User:  ToPublic(user),
+	}, nil
+}
