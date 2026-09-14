@@ -1,6 +1,7 @@
 package user
 
 import (
+	"blog-api/internal/middleware"
 	"blog-api/internal/response"
 	"net/http"
 
@@ -47,4 +48,22 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, "User logged in successfully", authResponse)
+}
+
+func (h *Handler) Me(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+
+	if !ok {
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	user, err := h.svc.GetProfile(c, userID)
+
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.Success(c, http.StatusOK, "User profile fetched successfully", user)
 }

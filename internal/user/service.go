@@ -128,3 +128,16 @@ func (s *Service) Login(ctx context.Context, input LoginRequest) (AuthResponse, 
 		User:  ToPublic(user),
 	}, nil
 }
+
+func (s *Service) GetProfile(ctx context.Context, userID string) (PublicUser, error) {
+	user, err := s.repo.FinduserByID(ctx, userID)
+
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return PublicUser{}, errors.New("User not found")
+		}
+		return PublicUser{}, err
+	}
+
+	return ToPublic(user), nil
+}
