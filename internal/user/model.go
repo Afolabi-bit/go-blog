@@ -46,8 +46,8 @@ func ToPublic(u User) PublicUser {
 type RegisterRequest struct {
 	Email     string `json:"email" form:"email" validate:"required,email"`
 	Password  string `json:"password" form:"password" validate:"required,min=6"`
-	FirstName string `json:"first_name" form:"first_name" validate:"required,min=3"`
-	LastName  string `json:"last_name" form:"last_name" validate:"required,min=3"`
+	FirstName string `json:"firstName" form:"firstName" validate:"required,min=3"`
+	LastName  string `json:"lastName" form:"lastName" validate:"required,min=3"`
 }
 
 type LoginRequest struct {

@@ -1,10 +1,13 @@
 package httpserver
 
 import (
+	"blog-api/internal/middleware"
+	"blog-api/internal/user"
+
 	"github.com/gin-gonic/gin"
 )
 
-func NewRouter() *gin.Engine {
+func NewRouter(userHandler *user.Handler, jwtSecret string) *gin.Engine {
 	router := gin.New()
 	router.HandleMethodNotAllowed = true
 	router.Use(gin.Logger())
@@ -12,7 +15,19 @@ func NewRouter() *gin.Engine {
 
 	router.GET("/health", health)
 
-	router.Group("/auth")
+	authGroup := router.Group("/auth")
 
+	{
+		authGroup.POST("/register", userHandler.Register)
+		authGroup.POST("/login", userHandler.Login)
+	}
+
+	userGroup := router.Group("/user")
+
+	userGroup.Use(middleware.AuthRequired(jwtSecret))
+
+	{
+		userGroup.GET("/iam", userHandler.Me)
+	}
 	return router
 }
