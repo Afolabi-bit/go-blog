@@ -25,7 +25,7 @@ func AuthRequired(jwtSecret string) gin.HandlerFunc {
 		}
 
 		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
 			response.Error(c, http.StatusUnauthorized, "invalid or missing authorization token")
 			c.Abort()
 			return
