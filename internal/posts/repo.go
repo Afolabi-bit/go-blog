@@ -221,6 +221,56 @@ func (r *Repo) GetByID(ctx context.Context, postID primitive.ObjectID) (Post, er
 	return post, nil
 }
 
+func (r *Repo) Update(ctx context.Context, postID primitive.ObjectID, authorID *primitive.ObjectID, update UpdatePostRequest) (Post, error) {
+	query := bson.M{"_id": postID}
+
+	if authorID != nil {
+		query["author_id"] = *authorID
+	}
+
+	fields := bson.M{"updated_at": time.Now()}
+
+	if update.Title != nil && strings.TrimSpace(*update.Title) != "" {
+		fields["title"] = strings.TrimSpace(*update.Title)
+	}
+	if update.Content != nil && strings.TrimSpace(*update.Content) != "" {
+		fields["content"] = *update.Content
+	}
+	if update.Status != nil && strings.TrimSpace(*update.Status) != "" {
+		fields["status"] = *update.Status
+	}
+	if update.Tags != nil {
+		fields["tags"] = *update.Tags
+	}
+
+	updatedFields := bson.M{
+		"$set": fields,
+	}
+
+	//If only "updated_at" exists in fields, nothing was actually modified
+	if len(fields) == 1 {
+		return r.GetByID(ctx, postID)
+	}
+
+	inCtx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+
+	var post Post
+
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	err := r.coll.FindOneAndUpdate(inCtx, query, updatedFields, opts).Decode(&post)
+
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return Post{}, mongo.ErrNoDocuments
+		}
+
+		return Post{}, fmt.Errorf("Failed to update post: %w", err)
+	}
+
+	return post, nil
+}
+
 func (r *Repo) Delete(ctx context.Context, postID primitive.ObjectID, authorID *primitive.ObjectID) error {
 	query := bson.M{"_id": postID}
 
