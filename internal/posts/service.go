@@ -125,3 +125,33 @@ func (s *Service) GetPostByID(ctx context.Context, postID string, requesterID *s
 
 	return post, nil
 }
+
+func (s *Service) ListPublicPosts(ctx context.Context, nextCursor string, limit int64, filter PostFilter) ([]Post, PaginationMeta, error) {
+	if limit <= 0 {
+		limit = 10
+	} else if limit > 20 {
+		limit = 20
+	}
+
+	posts, err := s.repo.ListPublished(ctx, nextCursor, limit, filter)
+
+	if err != nil {
+		return []Post{}, PaginationMeta{}, err
+	}
+
+	var nextCursorStr string
+	hasNext := int64(len(posts)) == limit
+
+	if hasNext && len(posts) > 0 {
+		nextCursorStr = posts[len(posts)-1].ID.Hex()
+	}
+
+	pMeta := PaginationMeta{
+		Limit:      limit,
+		HasNext:    hasNext,
+		NextCursor: nextCursorStr,
+		Count:      int64(len(posts)),
+	}
+
+	return posts, pMeta, nil
+}
