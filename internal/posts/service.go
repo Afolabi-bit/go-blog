@@ -186,3 +186,29 @@ func (s *Service) ListMyPosts(ctx context.Context, authorID primitive.ObjectID, 
 
 	return posts, pMeta, nil
 }
+
+func (s *Service) ListAllAdmin(ctx context.Context, nextCursor string, limit int64, filter PostFilter) ([]Post, PaginationMeta, error) {
+	limit = clampLimit(limit)
+
+	posts, err := s.repo.ListAllAdmin(ctx, nextCursor, limit, filter)
+
+	if err != nil {
+		return []Post{}, PaginationMeta{}, err
+	}
+
+	hasNext := int64(len(posts)) == limit
+
+	var nextCursorStr string
+	if hasNext {
+		nextCursorStr = posts[len(posts)-1].ID.Hex()
+	}
+
+	pMeta := PaginationMeta{
+		Limit:      limit,
+		HasNext:    hasNext,
+		NextCursor: nextCursorStr,
+		Count:      int64(len(posts)),
+	}
+
+	return posts, pMeta, nil
+}
