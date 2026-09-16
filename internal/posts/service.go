@@ -263,3 +263,32 @@ func (s *Service) UpdatePost(ctx context.Context, postID string, requesterID pri
 
 	return post, nil
 }
+
+func (s *Service) DeletePost(ctx context.Context, postID string, requesterID primitive.ObjectID, requesterRole string) error {
+	objID, err := primitive.ObjectIDFromHex(postID)
+
+	if err != nil {
+		return ErrNotFound
+	}
+
+	var authorID *primitive.ObjectID
+	switch requesterRole {
+	case RoleAdmin:
+		authorID = nil
+	case RoleAuthor:
+		authorID = &requesterID
+	default:
+		return ErrForbidden
+	}
+
+	err = s.repo.Delete(ctx, objID, authorID)
+
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return ErrNotFound
+		}
+		return err
+	}
+
+	return nil
+}
