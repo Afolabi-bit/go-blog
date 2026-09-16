@@ -212,3 +212,54 @@ func (s *Service) ListAllAdmin(ctx context.Context, nextCursor string, limit int
 
 	return posts, pMeta, nil
 }
+
+func (s *Service) UpdatePost(ctx context.Context, postID string, requesterID primitive.ObjectID, requesterRole string, input UpdatePostRequest) (Post, error) {
+	objID, err := primitive.ObjectIDFromHex(postID)
+
+	if err != nil {
+		return Post{}, ErrNotFound
+	}
+
+	status := input.Status
+	title := input.Title
+	content := input.Content
+
+	if status != nil {
+		if *status != StatusDraft && *status != StatusPublished {
+			return Post{}, ErrInvalidInput
+		}
+	}
+
+	if title != nil {
+		if strings.EqualFold(strings.TrimSpace(*title), "") {
+			return Post{}, ErrInvalidInput
+		}
+	}
+
+	if content != nil {
+		if strings.EqualFold(strings.TrimSpace(*content), "") {
+			return Post{}, ErrInvalidInput
+		}
+	}
+
+	var authorID *primitive.ObjectID
+	switch requesterRole {
+	case RoleAdmin:
+		authorID = nil
+	case RoleAuthor:
+		authorID = &requesterID
+	default:
+		return Post{}, ErrForbidden
+	}
+
+	post, err := s.repo.Update(ctx, objID, authorID, input)
+
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return Post{}, ErrNotFound
+		}
+		return Post{}, err
+	}
+
+	return post, nil
+}
