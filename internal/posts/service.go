@@ -2,11 +2,14 @@ package posts
 
 import (
 	"blog-api/internal/user"
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 var slugRegex = regexp.MustCompile(`[^a-z0-9]+`)
@@ -43,4 +46,49 @@ func generateSlug(title string) string {
 	}
 
 	return slug
+}
+
+func (s *Service) CreateNewPost(ctx context.Context, authorID primitive.ObjectID, authorName string, input CreatePostRequest) (Post, error) {
+	title := strings.TrimSpace(input.Title)
+	content := strings.TrimSpace(input.Content)
+
+	if title == "" || content == "" {
+		return Post{}, ErrInvalidInput
+	}
+
+	if strings.TrimSpace(input.Status) == "" {
+		input.Status = StatusDraft
+	} else if strings.TrimSpace(input.Status) != StatusDraft && strings.TrimSpace(input.Status) != StatusPublished {
+		return Post{}, ErrInvalidInput
+	}
+
+	var sanitizedTags []string
+
+	for _, tag := range input.Tags {
+		if trimmed := strings.TrimSpace(tag); trimmed != "" {
+			sanitizedTags = append(sanitizedTags, trimmed)
+		}
+	}
+
+	slug := generateSlug(input.Title)
+
+	newPost := Post{
+		Title:      title,
+		Content:    content,
+		Status:     input.Status,
+		Tags:       sanitizedTags,
+		AuthorID:   authorID,
+		AuthorName: authorName,
+		Slug:       slug,
+		CreatedAt:  time.Now().UTC(),
+		UpdatedAt:  time.Now().UTC(),
+	}
+
+	post, err := s.repo.CreatePost(ctx, newPost)
+
+	if err != nil {
+		return Post{}, err
+	}
+
+	return post, nil
 }
