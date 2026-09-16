@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 var slugRegex = regexp.MustCompile(`[^a-z0-9]+`)
@@ -88,6 +89,40 @@ func (s *Service) CreateNewPost(ctx context.Context, authorID primitive.ObjectID
 
 	if err != nil {
 		return Post{}, err
+	}
+
+	return post, nil
+}
+
+func (s *Service) GetPostByID(ctx context.Context, postID string, requesterID *string, requesterRole *string) (Post, error) {
+	objID, err := primitive.ObjectIDFromHex(postID)
+	if err != nil {
+		return Post{}, ErrNotFound
+	}
+
+	post, err := s.repo.GetByID(ctx, objID)
+
+	if err != nil || errors.Is(err, mongo.ErrNoDocuments) {
+		return Post{}, ErrNotFound
+	}
+
+	if post.Status != StatusPublished {
+
+		if requesterID == nil || requesterRole == nil {
+			return Post{}, ErrNotFound
+		}
+
+		if *requesterRole == RoleAdmin {
+			return post, nil
+		}
+
+		requesterObjID, err := primitive.ObjectIDFromHex(*requesterID)
+
+		if err == nil && requesterObjID == post.AuthorID {
+			return post, nil
+		}
+
+		return Post{}, ErrForbidden
 	}
 
 	return post, nil

@@ -9,6 +9,9 @@ import (
 const (
 	StatusDraft     = "draft"
 	StatusPublished = "published"
+	RoleAdmin       = "admin"
+	RoleAuthor      = "author"
+	RoleReader      = "reader"
 )
 
 type Post struct {
