@@ -70,10 +70,6 @@ func (r *Repo) ListPublished(ctx context.Context, nextCursor string, limit int64
 
 	opts.SetSort(bson.D{{Key: "_id", Value: -1}})
 
-	if limit <= 0 {
-		limit = 10
-	}
-
 	opts.SetLimit(limit)
 
 	inCtx, cancel := context.WithTimeout(ctx, time.Second*5)
@@ -115,9 +111,6 @@ func (r *Repo) ListByAuthor(ctx context.Context, authorID primitive.ObjectID, ne
 
 	opts := options.Find()
 
-	if limit <= 0 {
-		limit = 10
-	}
 	opts.SetLimit(limit)
 	opts.SetSort(bson.D{{Key: "_id", Value: -1}})
 
@@ -170,10 +163,6 @@ func (r *Repo) ListAllAdmin(ctx context.Context, nextCursor string, maxLimit int
 	}
 
 	opts := options.Find()
-
-	if maxLimit <= 0 {
-		maxLimit = 10
-	}
 
 	opts.SetLimit(maxLimit)
 	opts.SetSort(bson.D{{Key: "_id", Value: -1}})

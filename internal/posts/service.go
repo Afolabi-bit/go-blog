@@ -15,6 +15,15 @@ import (
 
 var slugRegex = regexp.MustCompile(`[^a-z0-9]+`)
 
+func clampLimit(limit int64) int64 {
+	if limit <= 0 {
+		return 10
+	} else if limit > 20 {
+		return 20
+	}
+	return limit
+}
+
 var (
 	ErrNotFound     = errors.New("post not found")
 	ErrForbidden    = errors.New("forbidden: you do not have required permission")
@@ -127,11 +136,7 @@ func (s *Service) GetPostByID(ctx context.Context, postID string, requesterID *s
 }
 
 func (s *Service) ListPublicPosts(ctx context.Context, nextCursor string, limit int64, filter PostFilter) ([]Post, PaginationMeta, error) {
-	if limit <= 0 {
-		limit = 10
-	} else if limit > 20 {
-		limit = 20
-	}
+	limit = clampLimit(limit)
 
 	posts, err := s.repo.ListPublished(ctx, nextCursor, limit, filter)
 
@@ -143,6 +148,32 @@ func (s *Service) ListPublicPosts(ctx context.Context, nextCursor string, limit 
 	hasNext := int64(len(posts)) == limit
 
 	if hasNext && len(posts) > 0 {
+		nextCursorStr = posts[len(posts)-1].ID.Hex()
+	}
+
+	pMeta := PaginationMeta{
+		Limit:      limit,
+		HasNext:    hasNext,
+		NextCursor: nextCursorStr,
+		Count:      int64(len(posts)),
+	}
+
+	return posts, pMeta, nil
+}
+
+func (s *Service) ListMyPosts(ctx context.Context, authorID primitive.ObjectID, nextCursor string, limit int64) ([]Post, PaginationMeta, error) {
+	limit = clampLimit(limit)
+
+	posts, err := s.repo.ListByAuthor(ctx, authorID, nextCursor, limit)
+
+	if err != nil {
+		return []Post{}, PaginationMeta{}, err
+	}
+
+	hasNext := int64(len(posts)) == limit
+
+	var nextCursorStr string
+	if hasNext {
 		nextCursorStr = posts[len(posts)-1].ID.Hex()
 	}
 
