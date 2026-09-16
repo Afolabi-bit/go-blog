@@ -220,3 +220,26 @@ func (r *Repo) GetByID(ctx context.Context, postID primitive.ObjectID) (Post, er
 
 	return post, nil
 }
+
+func (r *Repo) Delete(ctx context.Context, postID primitive.ObjectID, authorID *primitive.ObjectID) error {
+	query := bson.M{"_id": postID}
+
+	if authorID != nil {
+		query["author_id"] = *authorID
+	}
+
+	inCtx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+
+	result, err := r.coll.DeleteOne(inCtx, query)
+
+	if err != nil {
+		return fmt.Errorf("Failed to delete post: %w", err)
+	}
+
+	if result.DeletedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return nil
+}
