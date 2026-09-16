@@ -142,3 +142,59 @@ func (r *Repo) ListByAuthor(ctx context.Context, authorID primitive.ObjectID, ne
 
 	return posts, nil
 }
+
+func (r *Repo) ListAllAdmin(ctx context.Context, nextCursor string, maxLimit int64, filter PostFilter) ([]Post, error) {
+	query := bson.M{}
+
+	if strings.TrimSpace(filter.Status) != "" {
+		query["status"] = strings.TrimSpace(filter.Status)
+	}
+
+	if strings.TrimSpace(filter.Search) != "" {
+		query["title"] = bson.M{"$regex": strings.TrimSpace(filter.Search), "$options": "i"}
+	}
+
+	if strings.TrimSpace(filter.Tag) != "" {
+		query["tags"] = strings.TrimSpace(filter.Tag)
+	}
+
+	if nextCursor != "" {
+		objId, err := primitive.ObjectIDFromHex(nextCursor)
+
+		if err != nil {
+			return []Post{}, fmt.Errorf("Invalid value for next cursor: %w", err)
+		}
+
+		query["_id"] = bson.M{"$lt": objId}
+	}
+
+	opts := options.Find()
+
+	if maxLimit <= 0 {
+		maxLimit = 10
+	}
+
+	opts.SetLimit(maxLimit)
+	opts.SetSort(bson.D{{Key: "_id", Value: -1}})
+
+	inCtx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+
+	cursor, err := r.coll.Find(inCtx, query, opts)
+	if err != nil {
+		return []Post{}, fmt.Errorf("Failed to find posts: %w", err)
+	}
+	defer cursor.Close(inCtx)
+
+	var posts []Post
+
+	if err := cursor.All(inCtx, &posts); err != nil {
+		return []Post{}, fmt.Errorf("Failed to decode posts: %w", err)
+	}
+
+	if posts == nil {
+		return []Post{}, nil
+	}
+
+	return posts, nil
+}
