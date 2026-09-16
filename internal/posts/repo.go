@@ -96,3 +96,49 @@ func (r *Repo) ListPublished(ctx context.Context, nextCursor string, limit int64
 
 	return posts, nil
 }
+
+func (r *Repo) ListByAuthor(ctx context.Context, authorID primitive.ObjectID, nextCursor string, limit int64) ([]Post, error) {
+	query := bson.M{}
+
+	query["author_id"] = authorID
+
+	if nextCursor != "" {
+		objID, err := primitive.ObjectIDFromHex(nextCursor)
+
+		if err != nil {
+			return []Post{}, fmt.Errorf("Invalid value for next cursor: %w", err)
+		}
+
+		query["_id"] = bson.M{"$lt": objID}
+	}
+
+	opts := options.Find()
+
+	if limit <= 0 {
+		limit = 10
+	}
+	opts.SetLimit(limit)
+	opts.SetSort(bson.D{{Key: "_id", Value: -1}})
+
+	inCtx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+
+	cursor, err := r.coll.Find(inCtx, query, opts)
+	if err != nil {
+		return []Post{}, fmt.Errorf("Failed to find posts: %w", err)
+	}
+
+	defer cursor.Close(inCtx)
+
+	var posts []Post
+
+	if err := cursor.All(inCtx, &posts); err != nil {
+		return []Post{}, fmt.Errorf("Failed to decode posts: %w", err)
+	}
+
+	if posts == nil {
+		posts = []Post{}
+	}
+
+	return posts, nil
+}
