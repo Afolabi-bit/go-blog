@@ -36,9 +36,7 @@ func NewService(repo *Repo, user *user.Repo) *Service {
 func generateSlug(title string) string {
 	title = strings.ToLower(strings.TrimSpace(title))
 
-	reg := regexp.MustCompile(`[^a-z0-9]+`)
-
-	slug := reg.ReplaceAllString(title, "-")
+	slug := slugRegex.ReplaceAllString(title, "-")
 
 	slug = strings.Trim(slug, "-")
 
