@@ -2,27 +2,65 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"blog-api/internal/app"
-	"blog-api/internal/config"
 )
 
 func main() {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
-
 	ctx := context.Background()
 
 	app, err := app.NewApp(ctx)
-
 	if err != nil {
 		log.Fatalf("Failed to start application: %v", err)
 	}
 
-	if err := app.Router.Run(":" + cfg.Port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	serve := http.Server{
+		Addr:              fmt.Sprintf(":%s", app.Config.Port),
+		Handler:           app.Router,
+		ReadHeaderTimeout: time.Second * 5,
+		IdleTimeout:       time.Second * 60,
 	}
+
+	go func() {
+		log.Printf("Server listening on port %s", app.Config.Port)
+		err := serve.ListenAndServe()
+
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("Unexpected server shutdown: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	sig := <-quit
+	log.Printf("Received signal '%v'. Shutting down server...\n", sig)
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := serve.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Server forced to shutdown: %v", err)
+	} else {
+		log.Println("HTTP server stopped gracefully")
+	}
+
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer dbCancel()
+
+	if err := app.Close(dbCtx); err != nil {
+		log.Printf("Error closing database connection: %v", err)
+	} else {
+		log.Println("Database connection closed cleanly")
+	}
+
+	log.Println("Server exiting")
 }
