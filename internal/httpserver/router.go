@@ -22,6 +22,7 @@ func NewRouter(userHandler *user.Handler, postHandler *posts.Handler, jwtSecret 
 	{
 		authGroup.POST("/register", userHandler.Register)
 		authGroup.POST("/login", userHandler.Login)
+		authGroup.POST("/logout", middleware.AuthRequired(jwtSecret), userHandler.Logout)
 	}
 
 	// user
@@ -34,9 +35,9 @@ func NewRouter(userHandler *user.Handler, postHandler *posts.Handler, jwtSecret 
 	}
 
 	// posts
-	postGroup := router.Group("/api/post")
+	postGroup := router.Group("/api/posts")
 	{
-		postGroup.GET("")
+		postGroup.GET("", postHandler.ListPublicPosts)
 		postGroup.GET("/:id", postHandler.GetPostByID)
 	}
 
@@ -48,13 +49,12 @@ func NewRouter(userHandler *user.Handler, postHandler *posts.Handler, jwtSecret 
 	{
 		authorGroup.POST("/posts", postHandler.CreatePost)
 		authorGroup.GET("/my-posts", postHandler.ListMyPosts)
-		authorGroup.PATCH("/my-posts", postHandler.UpdatePost)
-		authorGroup.DELETE("/my-posts", postHandler.DeletePost)
-
+		authorGroup.PATCH("/posts/:id", postHandler.UpdatePost)
+		authorGroup.DELETE("/posts/:id", postHandler.DeletePost)
 	}
 
 	// admin
-	adminGroup := router.Group("/admin")
+	adminGroup := router.Group("/api/admin")
 	adminGroup.Use(middleware.AuthRequired(jwtSecret))
 	adminGroup.Use(middleware.RequireAdmin())
 

@@ -30,25 +30,25 @@ func (s *Service) Register(ctx context.Context, input RegisterRequest) (AuthResp
 	lastName := input.LastName
 
 	if email == "" {
-		return AuthResponse{}, fmt.Errorf("Email is required")
+		return AuthResponse{}, fmt.Errorf("%w: email is required", ErrInvalidInput)
 	}
 	if firstName == "" {
-		return AuthResponse{}, fmt.Errorf("First name is required")
+		return AuthResponse{}, fmt.Errorf("%w: first name is required", ErrInvalidInput)
 	}
 	if lastName == "" {
-		return AuthResponse{}, fmt.Errorf("Last name is required")
+		return AuthResponse{}, fmt.Errorf("%w: last name is required", ErrInvalidInput)
 	}
 	if password == "" {
-		return AuthResponse{}, fmt.Errorf("Password is required")
+		return AuthResponse{}, fmt.Errorf("%w: password is required", ErrInvalidInput)
 	}
 	if len(password) < 6 {
-		return AuthResponse{}, fmt.Errorf("Password must be at least 6 characters")
+		return AuthResponse{}, fmt.Errorf("%w: password must be at least 6 characters", ErrInvalidInput)
 	}
 
 	_, err := s.repo.FindUserByEmail(ctx, email)
 
 	if err == nil {
-		return AuthResponse{}, fmt.Errorf("Email already registered!")
+		return AuthResponse{}, ErrEmailAlreadyExists
 	}
 
 	if !errors.Is(err, mongo.ErrNoDocuments) {
@@ -58,14 +58,19 @@ func (s *Service) Register(ctx context.Context, input RegisterRequest) (AuthResp
 	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 
 	if err != nil {
-		return AuthResponse{}, fmt.Errorf("Failed to hash password: %w", err)
+		return AuthResponse{}, fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	now := time.Now()
 
+	role := input.Role
+	if role == "" {
+		role = RoleReader
+	}
+
 	user := User{
 		Email:        email,
-		Role:         RoleReader,
+		Role:         role,
 		FirstName:    firstName,
 		LastName:     lastName,
 		PasswordHash: string(hashedBytes),
@@ -96,25 +101,28 @@ func (s *Service) Login(ctx context.Context, input LoginRequest) (AuthResponse, 
 	password := input.Password
 
 	if email == "" {
-		return AuthResponse{}, fmt.Errorf("Email is required")
+		return AuthResponse{}, fmt.Errorf("%w: email is required", ErrInvalidInput)
 	}
 
 	if password == "" {
-		return AuthResponse{}, fmt.Errorf("Password is required")
+		return AuthResponse{}, fmt.Errorf("%w: password is required", ErrInvalidInput)
 	}
 
 	if len(password) < 6 {
-		return AuthResponse{}, fmt.Errorf("Password must be atleast 6 characters")
+		return AuthResponse{}, fmt.Errorf("%w: password must be at least 6 characters", ErrInvalidInput)
 	}
 
 	user, err := s.repo.FindUserByEmail(ctx, email)
 
 	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return AuthResponse{}, ErrInvalidCredentials
+		}
 		return AuthResponse{}, err
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return AuthResponse{}, errors.New("Invalid Credentials")
+		return AuthResponse{}, ErrInvalidCredentials
 	}
 
 	token, err := auth.CreateToken(s.jwtSecret, user.ID.Hex(), user.Email, user.Role)
@@ -134,7 +142,7 @@ func (s *Service) GetProfile(ctx context.Context, userID string) (PublicUser, er
 
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			return PublicUser{}, errors.New("User not found")
+			return PublicUser{}, ErrUserNotFound
 		}
 		return PublicUser{}, err
 	}

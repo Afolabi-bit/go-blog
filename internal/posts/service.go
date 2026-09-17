@@ -28,6 +28,7 @@ var (
 	ErrNotFound     = errors.New("post not found")
 	ErrForbidden    = errors.New("forbidden: you do not have required permission")
 	ErrInvalidInput = errors.New("invalid input")
+	ErrInvalidID    = errors.New("invalid post ID format")
 )
 
 type Service struct {
@@ -61,35 +62,38 @@ func (s *Service) CreateNewPost(ctx context.Context, authorID primitive.ObjectID
 	content := strings.TrimSpace(input.Content)
 
 	if title == "" || content == "" {
-		return Post{}, ErrInvalidInput
+		return Post{}, fmt.Errorf("%w: title and content are required", ErrInvalidInput)
 	}
 
 	if strings.TrimSpace(input.Status) == "" {
 		input.Status = StatusDraft
 	} else if strings.TrimSpace(input.Status) != StatusDraft && strings.TrimSpace(input.Status) != StatusPublished {
-		return Post{}, ErrInvalidInput
+		return Post{}, fmt.Errorf("%w: status must be '%s' or '%s'", ErrInvalidInput, StatusDraft, StatusPublished)
 	}
 
 	var sanitizedTags []string
 
 	for _, tag := range input.Tags {
-		if trimmed := strings.TrimSpace(tag); trimmed != "" {
-			sanitizedTags = append(sanitizedTags, trimmed)
+		clean := strings.TrimSpace(tag)
+
+		if clean != "" {
+			sanitizedTags = append(sanitizedTags, clean)
 		}
 	}
 
-	slug := generateSlug(input.Title)
+	input.Tags = sanitizedTags
 
+	now := time.Now()
 	newPost := Post{
-		Title:      title,
-		Content:    content,
-		Status:     input.Status,
-		Tags:       sanitizedTags,
 		AuthorID:   authorID,
 		AuthorName: authorName,
-		Slug:       slug,
-		CreatedAt:  time.Now().UTC(),
-		UpdatedAt:  time.Now().UTC(),
+		Title:      title,
+		Slug:       generateSlug(title),
+		Content:    content,
+		Status:     input.Status,
+		Tags:       input.Tags,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
 
 	post, err := s.repo.CreatePost(ctx, newPost)
@@ -104,7 +108,7 @@ func (s *Service) CreateNewPost(ctx context.Context, authorID primitive.ObjectID
 func (s *Service) GetPostByID(ctx context.Context, postID string, requesterID *string, requesterRole *string) (Post, error) {
 	objID, err := primitive.ObjectIDFromHex(postID)
 	if err != nil {
-		return Post{}, ErrNotFound
+		return Post{}, ErrInvalidID
 	}
 
 	post, err := s.repo.GetByID(ctx, objID)
@@ -217,7 +221,7 @@ func (s *Service) UpdatePost(ctx context.Context, postID string, requesterID pri
 	objID, err := primitive.ObjectIDFromHex(postID)
 
 	if err != nil {
-		return Post{}, ErrNotFound
+		return Post{}, ErrInvalidID
 	}
 
 	status := input.Status
@@ -226,19 +230,19 @@ func (s *Service) UpdatePost(ctx context.Context, postID string, requesterID pri
 
 	if status != nil {
 		if *status != StatusDraft && *status != StatusPublished {
-			return Post{}, ErrInvalidInput
+			return Post{}, fmt.Errorf("%w: status must be '%s' or '%s'", ErrInvalidInput, StatusDraft, StatusPublished)
 		}
 	}
 
 	if title != nil {
 		if strings.EqualFold(strings.TrimSpace(*title), "") {
-			return Post{}, ErrInvalidInput
+			return Post{}, fmt.Errorf("%w: title cannot be empty", ErrInvalidInput)
 		}
 	}
 
 	if content != nil {
 		if strings.EqualFold(strings.TrimSpace(*content), "") {
-			return Post{}, ErrInvalidInput
+			return Post{}, fmt.Errorf("%w: content cannot be empty", ErrInvalidInput)
 		}
 	}
 
@@ -268,7 +272,7 @@ func (s *Service) DeletePost(ctx context.Context, postID string, requesterID pri
 	objID, err := primitive.ObjectIDFromHex(postID)
 
 	if err != nil {
-		return ErrNotFound
+		return ErrInvalidID
 	}
 
 	var authorID *primitive.ObjectID

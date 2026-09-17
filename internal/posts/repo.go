@@ -192,7 +192,7 @@ func (r *Repo) ListAllAdmin(ctx context.Context, nextCursor string, maxLimit int
 func (r *Repo) GetByID(ctx context.Context, postID primitive.ObjectID) (Post, error) {
 	query := bson.M{"_id": postID}
 
-	inCtx, cancel := context.WithTimeout(ctx, time.Second*5)
+	inCtx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
 
 	var post Post
@@ -241,7 +241,7 @@ func (r *Repo) Update(ctx context.Context, postID primitive.ObjectID, authorID *
 		return r.GetByID(ctx, postID)
 	}
 
-	inCtx, cancel := context.WithTimeout(ctx, time.Second*5)
+	inCtx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
 
 	var post Post
@@ -267,7 +267,7 @@ func (r *Repo) Delete(ctx context.Context, postID primitive.ObjectID, authorID *
 		query["author_id"] = *authorID
 	}
 
-	inCtx, cancel := context.WithTimeout(ctx, time.Second*5)
+	inCtx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
 
 	result, err := r.coll.DeleteOne(inCtx, query)

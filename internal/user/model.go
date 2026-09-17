@@ -48,6 +48,7 @@ type RegisterRequest struct {
 	Password  string `json:"password" form:"password" validate:"required,min=6"`
 	FirstName string `json:"firstName" form:"firstName" validate:"required,min=3"`
 	LastName  string `json:"lastName" form:"lastName" validate:"required,min=3"`
+	Role      string `json:"role,omitempty" form:"role"`
 }
 
 type LoginRequest struct {

@@ -22,12 +22,12 @@ func NewApp(ctx context.Context) (*App, error) {
 	cfg, err := config.LoadConfig()
 
 	if err != nil {
-		return &App{}, err
+		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
 	database, err := db.Connect(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	userRepo := user.NewRepo(database.Database)

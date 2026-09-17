@@ -4,6 +4,7 @@ import (
 	"blog-api/internal/middleware"
 	"blog-api/internal/response"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -27,9 +28,10 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 		response.Error(c, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrForbidden):
 		response.Error(c, http.StatusForbidden, err.Error())
-	case errors.Is(err, ErrInvalidInput):
+	case errors.Is(err, ErrInvalidInput), errors.Is(err, ErrInvalidID):
 		response.Error(c, http.StatusBadRequest, err.Error())
 	default:
+		log.Printf("[ERROR] Posts handler unexpected error: %v", err)
 		response.Error(c, http.StatusInternalServerError, "internal server error")
 	}
 }
@@ -116,7 +118,7 @@ func (h *Handler) ListMyPosts(c *gin.Context) {
 
 	objID, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
-		h.handleError(c, err)
+		response.Error(c, http.StatusUnauthorized, "invalid user authentication token")
 		return
 	}
 	cursor := c.Query("cursor")
@@ -179,7 +181,7 @@ func (h *Handler) UpdatePost(c *gin.Context) {
 	userObjID, err := primitive.ObjectIDFromHex(userID)
 
 	if err != nil {
-		h.handleError(c, err)
+		response.Error(c, http.StatusUnauthorized, "invalid user authentication token")
 		return
 	}
 
@@ -220,7 +222,7 @@ func (h *Handler) DeletePost(c *gin.Context) {
 	userObjID, err := primitive.ObjectIDFromHex(userID)
 
 	if err != nil {
-		h.handleError(c, err)
+		response.Error(c, http.StatusUnauthorized, "invalid user authentication token")
 		return
 	}
 
