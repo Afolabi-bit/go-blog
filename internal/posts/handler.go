@@ -104,6 +104,7 @@ func (h *Handler) ListPublicPosts(c *gin.Context) {
 		"posts":      posts,
 		"pagination": meta,
 	})
+
 }
 
 func (h *Handler) ListMyPosts(c *gin.Context) {
@@ -138,4 +139,25 @@ func (h *Handler) ListMyPosts(c *gin.Context) {
 		"posts":      posts,
 		"pagination": meta,
 	})
+}
+
+func (h *Handler) ListAllAdmin(c *gin.Context) {
+	var filter PostFilter
+	err := c.ShouldBindQuery(&filter)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "Invalid query parameter")
+		return
+	}
+
+	posts, meta, err := h.svc.ListAllAdmin(c.Request.Context(), filter.Cursor, filter.Limit, filter)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Fetched posts successfully", gin.H{
+		"posts":      posts,
+		"pagination": meta,
+	})
+
 }
