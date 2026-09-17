@@ -159,5 +159,45 @@ func (h *Handler) ListAllAdmin(c *gin.Context) {
 		"posts":      posts,
 		"pagination": meta,
 	})
+}
 
+func (h *Handler) UpdatePost(c *gin.Context) {
+	postID := c.Param("id")
+
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		response.Error(c, http.StatusUnauthorized, "You do not have required permissions.")
+		return
+	}
+
+	userRole, ok := middleware.GetRole(c)
+	if !ok {
+		response.Error(c, http.StatusUnauthorized, "You do not have required permissions.")
+		return
+	}
+
+	userObjID, err := primitive.ObjectIDFromHex(userID)
+
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	var update UpdatePostRequest
+
+	err = c.ShouldBindJSON(&update)
+
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	post, err := h.svc.UpdatePost(c.Request.Context(), postID, userObjID, userRole, update)
+
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Post updated successfully", post)
 }
