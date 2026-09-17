@@ -81,3 +81,25 @@ func (h *Handler) GetPostByID(c *gin.Context) {
 	}
 	response.Success(c, http.StatusOK, "Post fetched successfully", post)
 }
+
+func (h *Handler) ListPublicPosts(c *gin.Context) {
+	var filter PostFilter
+	err := c.ShouldBindQuery(&filter)
+
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "Invalid query parameters")
+		return
+	}
+
+	posts, meta, err := h.svc.ListPublicPosts(c, filter.Cursor, filter.Limit, filter)
+
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Fetched posts successfully", gin.H{
+		"posts":      posts,
+		"pagination": meta,
+	})
+}
