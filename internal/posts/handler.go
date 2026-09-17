@@ -201,3 +201,34 @@ func (h *Handler) UpdatePost(c *gin.Context) {
 
 	response.Success(c, http.StatusOK, "Post updated successfully", post)
 }
+
+func (h *Handler) DeletePost(c *gin.Context) {
+	postID := c.Param("id")
+
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		response.Error(c, http.StatusUnauthorized, "You do not have required permissions.")
+		return
+	}
+
+	userRole, ok := middleware.GetRole(c)
+	if !ok {
+		response.Error(c, http.StatusUnauthorized, "You do not have required permissions.")
+		return
+	}
+
+	userObjID, err := primitive.ObjectIDFromHex(userID)
+
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	err = h.svc.DeletePost(c, postID, userObjID, userRole)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Post successfully deleted", nil)
+}
