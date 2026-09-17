@@ -5,8 +5,10 @@ import (
 	"blog-api/internal/response"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type Handler struct {
@@ -54,7 +56,7 @@ func (h *Handler) CreatePost(c *gin.Context) {
 	}
 
 	authorName := user.FirstName + " " + user.LastName
-	createdPost, err := h.svc.CreateNewPost(c, user.ID, authorName, post)
+	createdPost, err := h.svc.CreateNewPost(c.Request.Context(), user.ID, authorName, post)
 
 	if err != nil {
 		h.handleError(c, err)
@@ -91,7 +93,41 @@ func (h *Handler) ListPublicPosts(c *gin.Context) {
 		return
 	}
 
-	posts, meta, err := h.svc.ListPublicPosts(c, filter.Cursor, filter.Limit, filter)
+	posts, meta, err := h.svc.ListPublicPosts(c.Request.Context(), filter.Cursor, filter.Limit, filter)
+
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Fetched posts successfully", gin.H{
+		"posts":      posts,
+		"pagination": meta,
+	})
+}
+
+func (h *Handler) ListMyPosts(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		response.Error(c, http.StatusUnauthorized, "You cannot access other user's posts domain")
+		return
+	}
+
+	objID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	cursor := c.Query("cursor")
+	limitStr := c.DefaultQuery("limit", "10")
+
+	limit, err := strconv.ParseInt(limitStr, 10, 64)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "Invalid limit parameter")
+		return
+	}
+
+	posts, meta, err := h.svc.ListMyPosts(c.Request.Context(), objID, cursor, limit)
 
 	if err != nil {
 		h.handleError(c, err)
