@@ -224,7 +224,7 @@ func (h *Handler) DeletePost(c *gin.Context) {
 		return
 	}
 
-	err = h.svc.DeletePost(c, postID, userObjID, userRole)
+	err = h.svc.DeletePost(c.Request.Context(), postID, userObjID, userRole)
 	if err != nil {
 		h.handleError(c, err)
 		return
