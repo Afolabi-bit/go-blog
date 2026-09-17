@@ -19,36 +19,28 @@ func AuthRequired(jwtSecret string) gin.HandlerFunc {
 		authHeader := c.GetHeader("Authorization")
 
 		if authHeader == "" {
-			response.Error(c, http.StatusUnauthorized, "invalid or missing authorization token")
+			response.Error(c, http.StatusUnauthorized, auth.ErrMissingAuthHeader.Error())
 			c.Abort()
 			return
 		}
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-			response.Error(c, http.StatusUnauthorized, "invalid or missing authorization token")
+			response.Error(c, http.StatusUnauthorized, auth.ErrInvalidToken.Error())
 			c.Abort()
 			return
 		}
 
-		scheme := strings.ToLower(strings.TrimSpace(parts[0]))
-		tokenStr := parts[1]
-
-		if scheme != "bearer" {
-			response.Error(c, http.StatusUnauthorized, "invalid or missing authorization token")
-			c.Abort()
-			return
-		}
-
+		tokenStr := strings.TrimSpace(parts[1])
 		if tokenStr == "" {
-			response.Error(c, http.StatusUnauthorized, "invalid or missing authorization token")
+			response.Error(c, http.StatusUnauthorized, auth.ErrInvalidToken.Error())
 			c.Abort()
 			return
 		}
 
 		claims, err := auth.ParseToken(jwtSecret, tokenStr)
 		if err != nil {
-			response.Error(c, http.StatusUnauthorized, "invalid or missing authorization token")
+			response.Error(c, http.StatusUnauthorized, auth.ErrInvalidToken.Error())
 			c.Abort()
 			return
 		}

@@ -5,6 +5,6 @@ import "errors"
 var (
 	ErrUserNotFound       = errors.New("user not found")
 	ErrEmailAlreadyExists = errors.New("email already registered")
-	ErrInvalidCredentials = errors.New("invalid email or password")
-	ErrInvalidInput       = errors.New("invalid user input")
+	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrInvalidInput       = errors.New("invalid input")
 )
