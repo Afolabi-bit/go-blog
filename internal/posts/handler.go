@@ -63,3 +63,21 @@ func (h *Handler) CreatePost(c *gin.Context) {
 
 	response.Success(c, http.StatusCreated, "post successfully created", createdPost)
 }
+
+func (h *Handler) GetPostByID(c *gin.Context) {
+	postID := c.Param("id")
+
+	var requesterIDPtr, requesterRolePtr *string
+	if userID, ok := middleware.GetUserID(c); ok {
+		requesterIDPtr = &userID
+	}
+	if userRole, ok := middleware.GetRole(c); ok {
+		requesterRolePtr = &userRole
+	}
+	post, err := h.svc.GetPostByID(c.Request.Context(), postID, requesterIDPtr, requesterRolePtr)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, "Post fetched successfully", post)
+}
