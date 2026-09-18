@@ -26,9 +26,9 @@ func clampLimit(limit int64) int64 {
 
 var (
 	ErrNotFound     = errors.New("post not found")
-	ErrForbidden    = errors.New("forbidden: you do not have required permission")
+	ErrForbidden    = errors.New("permission denied")
 	ErrInvalidInput = errors.New("invalid input")
-	ErrInvalidID    = errors.New("invalid post ID format")
+	ErrInvalidID    = errors.New("invalid post id format")
 )
 
 type Service struct {

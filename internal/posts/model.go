@@ -28,10 +28,10 @@ type Post struct {
 }
 
 type CreatePostRequest struct {
-	Title   string   `json:"title" binding:"required"`
-	Content string   `json:"content" binding:"required"`
-	Status  string   `json:"status" binding:"omitempty"`
-	Tags    []string `json:"tags" binding:"omitempty"`
+	Title   string   `json:"title"`
+	Content string   `json:"content"`
+	Status  string   `json:"status"`
+	Tags    []string `json:"tags"`
 }
 
 type UpdatePostRequest struct {

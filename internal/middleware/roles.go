@@ -12,13 +12,13 @@ func RequireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, ok := GetRole(c)
 		if !ok {
-			response.Error(c, http.StatusUnauthorized, "you don't have the permission to perform this action.")
+			response.Error(c, http.StatusUnauthorized, "unauthorized")
 			c.Abort()
 			return
 		}
 
 		if !strings.EqualFold(role, "admin") {
-			response.Error(c, http.StatusForbidden, "you don't have the permission to perform this action.")
+			response.Error(c, http.StatusForbidden, "permission denied")
 			c.Abort()
 			return
 		}
@@ -30,7 +30,7 @@ func RequireRoles(allowedRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, ok := GetRole(c)
 		if !ok {
-			response.Error(c, http.StatusUnauthorized, "you don't have the permission to perform this action.")
+			response.Error(c, http.StatusUnauthorized, "unauthorized")
 			c.Abort()
 			return
 		}
@@ -41,7 +41,7 @@ func RequireRoles(allowedRoles ...string) gin.HandlerFunc {
 				return
 			}
 		}
-		response.Error(c, http.StatusForbidden, "you don't have the permission to perform this action.")
+		response.Error(c, http.StatusForbidden, "permission denied")
 		c.Abort()
 	}
 }

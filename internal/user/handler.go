@@ -36,7 +36,7 @@ func (h *Handler) Register(c *gin.Context) {
 	var input RegisterRequest
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		response.Error(c, http.StatusBadRequest, err.Error())
+		response.Error(c, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 
@@ -53,7 +53,7 @@ func (h *Handler) Login(c *gin.Context) {
 	var input LoginRequest
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		response.Error(c, http.StatusBadRequest, err.Error())
+		response.Error(c, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 

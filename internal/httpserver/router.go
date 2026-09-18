@@ -36,6 +36,7 @@ func NewRouter(userHandler *user.Handler, postHandler *posts.Handler, jwtSecret 
 
 	// posts
 	postGroup := router.Group("/api/posts")
+	postGroup.Use(middleware.AuthOptional(jwtSecret))
 	{
 		postGroup.GET("", postHandler.ListPublicPosts)
 		postGroup.GET("/:id", postHandler.GetPostByID)

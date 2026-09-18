@@ -40,7 +40,7 @@ func (h *Handler) CreatePost(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 
 	if !ok {
-		response.Error(c, http.StatusUnauthorized, "Please login to create post.")
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -53,7 +53,7 @@ func (h *Handler) CreatePost(c *gin.Context) {
 	var post CreatePostRequest
 
 	if err = c.ShouldBindJSON(&post); err != nil {
-		response.Error(c, http.StatusBadRequest, err.Error())
+		response.Error(c, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 
@@ -91,7 +91,7 @@ func (h *Handler) ListPublicPosts(c *gin.Context) {
 	err := c.ShouldBindQuery(&filter)
 
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid query parameters")
+		response.Error(c, http.StatusBadRequest, "invalid query parameters")
 		return
 	}
 
@@ -112,13 +112,13 @@ func (h *Handler) ListPublicPosts(c *gin.Context) {
 func (h *Handler) ListMyPosts(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		response.Error(c, http.StatusUnauthorized, "You cannot access other user's posts domain")
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	objID, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
-		response.Error(c, http.StatusUnauthorized, "invalid user authentication token")
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	cursor := c.Query("cursor")
@@ -126,7 +126,7 @@ func (h *Handler) ListMyPosts(c *gin.Context) {
 
 	limit, err := strconv.ParseInt(limitStr, 10, 64)
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid limit parameter")
+		response.Error(c, http.StatusBadRequest, "invalid limit parameter")
 		return
 	}
 
@@ -147,7 +147,7 @@ func (h *Handler) ListAllAdmin(c *gin.Context) {
 	var filter PostFilter
 	err := c.ShouldBindQuery(&filter)
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid query parameter")
+		response.Error(c, http.StatusBadRequest, "invalid query parameters")
 		return
 	}
 
@@ -168,20 +168,20 @@ func (h *Handler) UpdatePost(c *gin.Context) {
 
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		response.Error(c, http.StatusUnauthorized, "You do not have required permissions.")
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	userRole, ok := middleware.GetRole(c)
 	if !ok {
-		response.Error(c, http.StatusUnauthorized, "You do not have required permissions.")
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	userObjID, err := primitive.ObjectIDFromHex(userID)
 
 	if err != nil {
-		response.Error(c, http.StatusUnauthorized, "invalid user authentication token")
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -190,7 +190,7 @@ func (h *Handler) UpdatePost(c *gin.Context) {
 	err = c.ShouldBindJSON(&update)
 
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "Invalid JSON")
+		response.Error(c, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 
@@ -209,20 +209,20 @@ func (h *Handler) DeletePost(c *gin.Context) {
 
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		response.Error(c, http.StatusUnauthorized, "You do not have required permissions.")
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	userRole, ok := middleware.GetRole(c)
 	if !ok {
-		response.Error(c, http.StatusUnauthorized, "You do not have required permissions.")
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	userObjID, err := primitive.ObjectIDFromHex(userID)
 
 	if err != nil {
-		response.Error(c, http.StatusUnauthorized, "invalid user authentication token")
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
