@@ -36,6 +36,19 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 	}
 }
 
+// CreatePost godoc
+// @Summary      Create a new post
+// @Description  Creates a draft or published post (Author or Admin role required)
+// @Tags         posts
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        request body posts.CreatePostRequest true "Post creation payload"
+// @Success      201  {object}  response.Response{data=posts.Post}
+// @Failure      400  {object}  response.Response
+// @Failure      401  {object}  response.Response
+// @Failure      403  {object}  response.Response
+// @Router       /api/posts [post]
 func (h *Handler) CreatePost(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 
@@ -68,6 +81,18 @@ func (h *Handler) CreatePost(c *gin.Context) {
 	response.Success(c, http.StatusCreated, "post successfully created", createdPost)
 }
 
+// GetPostByID godoc
+// @Summary      Get a single post by ID
+// @Description  Fetch post details. Published posts are public; draft posts require author or admin credentials.
+// @Tags         posts
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string true "Post ID (24-char hex MongoDB ObjectID)"
+// @Success      200  {object}  response.Response{data=posts.Post}
+// @Failure      400  {object}  response.Response
+// @Failure      403  {object}  response.Response
+// @Failure      404  {object}  response.Response
+// @Router       /api/posts/{id} [get]
 func (h *Handler) GetPostByID(c *gin.Context) {
 	postID := c.Param("id")
 
@@ -86,6 +111,18 @@ func (h *Handler) GetPostByID(c *gin.Context) {
 	response.Success(c, http.StatusOK, "Post fetched successfully", post)
 }
 
+// ListPublicPosts godoc
+// @Summary      List published posts
+// @Description  Browse published blog posts with search, tag filtering, and cursor pagination
+// @Tags         posts
+// @Produce      json
+// @Param        search query string false "Search keyword in post titles"
+// @Param        tag    query string false "Filter by tag"
+// @Param        limit  query int    false "Number of posts to return (default 10, max 20)"
+// @Param        cursor query string false "Pagination cursor"
+// @Success      200  {object}  response.Response
+// @Failure      400  {object}  response.Response
+// @Router       /api/posts [get]
 func (h *Handler) ListPublicPosts(c *gin.Context) {
 	var filter PostFilter
 	err := c.ShouldBindQuery(&filter)
@@ -109,6 +146,18 @@ func (h *Handler) ListPublicPosts(c *gin.Context) {
 
 }
 
+// ListMyPosts godoc
+// @Summary      Author post dashboard
+// @Description  Lists all posts created by the authenticated author, including drafts and published posts
+// @Tags         posts
+// @Produce      json
+// @Security     BearerAuth
+// @Param        limit  query int    false "Limit (default 10, max 20)"
+// @Param        cursor query string false "Pagination cursor"
+// @Success      200  {object}  response.Response
+// @Failure      401  {object}  response.Response
+// @Failure      403  {object}  response.Response
+// @Router       /api/my-posts [get]
 func (h *Handler) ListMyPosts(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
@@ -143,6 +192,21 @@ func (h *Handler) ListMyPosts(c *gin.Context) {
 	})
 }
 
+// ListAllAdmin godoc
+// @Summary      Admin post moderation list
+// @Description  Lists all posts across all authors and statuses (Admin role required)
+// @Tags         admin
+// @Produce      json
+// @Security     BearerAuth
+// @Param        search query string false "Search keyword"
+// @Param        tag    query string false "Filter by tag"
+// @Param        status query string false "Filter by status"
+// @Param        limit  query int    false "Limit"
+// @Param        cursor query string false "Pagination cursor"
+// @Success      200  {object}  response.Response
+// @Failure      401  {object}  response.Response
+// @Failure      403  {object}  response.Response
+// @Router       /api/admin/posts [get]
 func (h *Handler) ListAllAdmin(c *gin.Context) {
 	var filter PostFilter
 	err := c.ShouldBindQuery(&filter)
@@ -163,6 +227,21 @@ func (h *Handler) ListAllAdmin(c *gin.Context) {
 	})
 }
 
+// UpdatePost godoc
+// @Summary      Update a post
+// @Description  Partially update a post's title, content, or status. Authors can only update their own posts; Admins can update any post.
+// @Tags         posts
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id      path string                  true "Post ID (24-char hex MongoDB ObjectID)"
+// @Param        request body posts.UpdatePostRequest true "Update payload"
+// @Success      200     {object} response.Response{data=posts.Post}
+// @Failure      400     {object} response.Response
+// @Failure      401     {object} response.Response
+// @Failure      403     {object} response.Response
+// @Failure      404     {object} response.Response
+// @Router       /api/posts/{id} [patch]
 func (h *Handler) UpdatePost(c *gin.Context) {
 	postID := c.Param("id")
 
@@ -204,6 +283,19 @@ func (h *Handler) UpdatePost(c *gin.Context) {
 	response.Success(c, http.StatusOK, "Post updated successfully", post)
 }
 
+// DeletePost godoc
+// @Summary      Delete a post
+// @Description  Deletes a post. Authors can only delete their own posts; Admins can delete any post.
+// @Tags         posts
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string true "Post ID (24-char hex MongoDB ObjectID)"
+// @Success      200  {object}  response.Response
+// @Failure      400  {object}  response.Response
+// @Failure      401  {object}  response.Response
+// @Failure      403  {object}  response.Response
+// @Failure      404  {object}  response.Response
+// @Router       /api/posts/{id} [delete]
 func (h *Handler) DeletePost(c *gin.Context) {
 	postID := c.Param("id")
 

@@ -32,6 +32,16 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 	}
 }
 
+// Register godoc
+// @Summary      Register a new user
+// @Description  Creates a new user account (defaults to reader role)
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        request body user.RegisterRequest true "User registration details"
+// @Success      201  {object}  response.Response{data=user.AuthResponse}
+// @Failure      400  {object}  response.Response
+// @Router       /auth/register [post]
 func (h *Handler) Register(c *gin.Context) {
 	var input RegisterRequest
 
@@ -49,6 +59,17 @@ func (h *Handler) Register(c *gin.Context) {
 	response.Success(c, http.StatusCreated, "User registered successfully", authResponse)
 }
 
+// Login godoc
+// @Summary      Log in user
+// @Description  Authenticates user credentials and returns a JWT Bearer token
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        request body user.LoginRequest true "Login credentials"
+// @Success      200  {object}  response.Response{data=user.AuthResponse}
+// @Failure      400  {object}  response.Response
+// @Failure      401  {object}  response.Response
+// @Router       /auth/login [post]
 func (h *Handler) Login(c *gin.Context) {
 	var input LoginRequest
 
@@ -66,6 +87,15 @@ func (h *Handler) Login(c *gin.Context) {
 	response.Success(c, http.StatusOK, "User logged in successfully", authResponse)
 }
 
+// Me godoc
+// @Summary      Get current user profile
+// @Description  Returns details of the currently authenticated user
+// @Tags         user
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  response.Response{data=user.PublicUser}
+// @Failure      401  {object}  response.Response
+// @Router       /user/iam [get]
 func (h *Handler) Me(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 
@@ -84,6 +114,15 @@ func (h *Handler) Me(c *gin.Context) {
 	response.Success(c, http.StatusOK, "User profile fetched successfully", user)
 }
 
+// Logout godoc
+// @Summary      Log out user
+// @Description  Logs out the user session
+// @Tags         auth
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  response.Response
+// @Failure      401  {object}  response.Response
+// @Router       /auth/logout [post]
 func (h *Handler) Logout(c *gin.Context) {
 	response.Success(c, http.StatusOK, "User logged out successfully", nil)
 }

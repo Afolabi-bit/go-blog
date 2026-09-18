@@ -1,11 +1,14 @@
 package httpserver
 
 import (
+	_ "blog-api/docs"
 	"blog-api/internal/middleware"
 	"blog-api/internal/posts"
 	"blog-api/internal/user"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func NewRouter(userHandler *user.Handler, postHandler *posts.Handler, jwtSecret string) *gin.Engine {
@@ -15,6 +18,7 @@ func NewRouter(userHandler *user.Handler, postHandler *posts.Handler, jwtSecret 
 	router.Use(gin.Recovery())
 
 	router.GET("/health", health)
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// auth
 	authGroup := router.Group("/auth")

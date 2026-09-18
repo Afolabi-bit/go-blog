@@ -14,6 +14,22 @@ import (
 	"blog-api/internal/app"
 )
 
+// @title           Blog REST API
+// @version         1.0
+// @description     A multi-tenant Blog API with JWT authentication and Role-Based Access Control (RBAC).
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.email  support@blog.com
+
+// @host      localhost:5000
+// @BasePath  /
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and your JWT token. Example: "Bearer eyJhbGciOi..."
+
 func main() {
 	ctx := context.Background()
 
