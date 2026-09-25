@@ -94,9 +94,22 @@ definitions:
       likes_count:
         type: integer
     type: object
+  media.UploadResponse:
+    properties:
+      filename:
+        type: string
+      mime_type:
+        type: string
+      size:
+        type: integer
+      url:
+        type: string
+    type: object
   posts.CreatePostRequest:
     properties:
       content:
+        type: string
+      cover_image:
         type: string
       status:
         type: string
@@ -116,6 +129,8 @@ definitions:
       comments_count:
         type: integer
       content:
+        type: string
+      cover_image:
         type: string
       created_at:
         type: string
@@ -140,6 +155,8 @@ definitions:
     properties:
       content:
         type: string
+      cover_image:
+        type: string
       status:
         type: string
       tags:
@@ -162,10 +179,23 @@ definitions:
     type: object
   user.AuthResponse:
     properties:
+      refresh_token:
+        type: string
       token:
         type: string
       user:
         $ref: '#/definitions/user.PublicUser'
+    type: object
+  user.ChangePasswordRequest:
+    properties:
+      new_password:
+        minLength: 6
+        type: string
+      old_password:
+        type: string
+    required:
+    - new_password
+    - old_password
     type: object
   user.LoginRequest:
     properties:
@@ -179,6 +209,10 @@ definitions:
     type: object
   user.PublicUser:
     properties:
+      avatar_url:
+        type: string
+      bio:
+        type: string
       created_at:
         type: string
       email:
@@ -191,6 +225,13 @@ definitions:
         type: string
       updated_at:
         type: string
+    type: object
+  user.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
     type: object
   user.RegisterRequest:
     properties:
@@ -212,6 +253,22 @@ definitions:
     - firstName
     - lastName
     - password
+    type: object
+  user.UpdateProfileRequest:
+    properties:
+      avatar_url:
+        type: string
+      bio:
+        maxLength: 500
+        type: string
+      first_name:
+        maxLength: 50
+        minLength: 2
+        type: string
+      last_name:
+        maxLength: 50
+        minLength: 2
+        type: string
     type: object
 host: localhost:5000
 info:
@@ -392,6 +449,47 @@ paths:
       summary: Delete a comment
       tags:
       - comments
+  /api/media/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload an image file (cover image, inline asset) up to 5MB (Author
+        or Admin role required)
+      parameters:
+      - description: Image file to upload (JPEG, PNG, WebP, GIF)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/media.UploadResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Upload an image asset
+      tags:
+      - media
   /api/my-posts:
     get:
       description: Lists all posts created by the authenticated author, including
@@ -851,7 +949,13 @@ paths:
       - auth
   /auth/logout:
     post:
-      description: Logs out the user session
+      description: Logs out the user session and revokes refresh tokens
+      parameters:
+      - description: Optional refresh token to revoke
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/user.RefreshTokenRequest'
       produces:
       - application/json
       responses:
@@ -866,6 +970,42 @@ paths:
       security:
       - BearerAuth: []
       summary: Log out user
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Exchanges an active refresh token for a new access token and rotated
+        refresh token
+      parameters:
+      - description: Refresh token payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/user.AuthResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Refresh access token
       tags:
       - auth
   /auth/register:
@@ -988,6 +1128,38 @@ paths:
       summary: Submit application to become an author
       tags:
       - author-requests
+  /user/change-password:
+    patch:
+      consumes:
+      - application/json
+      description: Updates current user password and invalidates active refresh tokens
+      parameters:
+      - description: Password change payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Change user password
+      tags:
+      - user
   /user/iam:
     get:
       description: Returns details of the currently authenticated user
@@ -1010,6 +1182,44 @@ paths:
       security:
       - BearerAuth: []
       summary: Get current user profile
+      tags:
+      - user
+  /user/profile:
+    patch:
+      consumes:
+      - application/json
+      description: Update current user's profile details (first name, last name, bio,
+        avatar)
+      parameters:
+      - description: Profile update payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/user.PublicUser'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Update user profile
       tags:
       - user
 securityDefinitions:
