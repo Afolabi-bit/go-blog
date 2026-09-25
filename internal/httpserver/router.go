@@ -3,6 +3,8 @@ package httpserver
 import (
 	_ "blog-api/docs"
 	"blog-api/internal/authorrequest"
+	"blog-api/internal/comments"
+	"blog-api/internal/likes"
 	"blog-api/internal/middleware"
 	"blog-api/internal/posts"
 	"blog-api/internal/user"
@@ -16,6 +18,8 @@ func NewRouter(
 	userHandler *user.Handler,
 	postHandler *posts.Handler,
 	authorRequestHandler *authorrequest.Handler,
+	commentHandler *comments.Handler,
+	likeHandler *likes.Handler,
 	pinger HealthPinger,
 	jwtSecret string,
 ) *gin.Engine {
@@ -48,13 +52,24 @@ func NewRouter(
 		userGroup.GET("/author-request", authorRequestHandler.GetMyRequest)
 	}
 
-	// posts
+	// posts & public read
 	postGroup := router.Group("/api/posts")
 	postGroup.Use(middleware.AuthOptional(jwtSecret))
 	{
 		postGroup.GET("", postHandler.ListPublicPosts)
 		postGroup.GET("/slug/:slug", postHandler.GetPostBySlug)
 		postGroup.GET("/:id", postHandler.GetPostByID)
+		postGroup.GET("/:id/comments", commentHandler.ListComments)
+		postGroup.GET("/:id/like", likeHandler.GetStatus)
+	}
+
+	// authenticated user engagement (comments, likes)
+	engagementGroup := router.Group("/api")
+	engagementGroup.Use(middleware.AuthRequired(jwtSecret))
+	{
+		engagementGroup.POST("/posts/:id/comments", commentHandler.AddComment)
+		engagementGroup.DELETE("/comments/:id", commentHandler.DeleteComment)
+		engagementGroup.POST("/posts/:id/like", likeHandler.ToggleLike)
 	}
 
 	// author
