@@ -83,12 +83,27 @@ func (s *Service) CreateNewPost(ctx context.Context, authorID primitive.ObjectID
 
 	input.Tags = sanitizedTags
 
+	baseSlug := generateSlug(title)
+	slug := baseSlug
+	counter := 1
+	for {
+		exists, err := s.repo.ExistsBySlug(ctx, slug)
+		if err != nil {
+			return Post{}, err
+		}
+		if !exists {
+			break
+		}
+		slug = fmt.Sprintf("%s-%d", baseSlug, counter)
+		counter++
+	}
+
 	now := time.Now()
 	newPost := Post{
 		AuthorID:   authorID,
 		AuthorName: authorName,
 		Title:      title,
-		Slug:       generateSlug(title),
+		Slug:       slug,
 		Content:    content,
 		Status:     input.Status,
 		Tags:       input.Tags,
@@ -129,6 +144,37 @@ func (s *Service) GetPostByID(ctx context.Context, postID string, requesterID *s
 
 		requesterObjID, err := primitive.ObjectIDFromHex(*requesterID)
 
+		if err == nil && requesterObjID == post.AuthorID {
+			return post, nil
+		}
+
+		return Post{}, ErrForbidden
+	}
+
+	return post, nil
+}
+
+func (s *Service) GetPostBySlug(ctx context.Context, slug string, requesterID *string, requesterRole *string) (Post, error) {
+	cleanSlug := strings.TrimSpace(slug)
+	if cleanSlug == "" {
+		return Post{}, ErrNotFound
+	}
+
+	post, err := s.repo.GetBySlug(ctx, cleanSlug)
+	if err != nil || errors.Is(err, mongo.ErrNoDocuments) {
+		return Post{}, ErrNotFound
+	}
+
+	if post.Status != StatusPublished {
+		if requesterID == nil || requesterRole == nil {
+			return Post{}, ErrNotFound
+		}
+
+		if *requesterRole == RoleAdmin {
+			return post, nil
+		}
+
+		requesterObjID, err := primitive.ObjectIDFromHex(*requesterID)
 		if err == nil && requesterObjID == post.AuthorID {
 			return post, nil
 		}
