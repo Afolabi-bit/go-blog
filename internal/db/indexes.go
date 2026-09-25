@@ -70,5 +70,33 @@ func EnsureIndexes(ctx context.Context, database *mongo.Database) error {
 		return fmt.Errorf("failed to create author_requests indexes: %w", err)
 	}
 
+	// 4. Comments collection indexes
+	commentsColl := database.Collection("comments")
+	commentIndexes := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "post_id", Value: 1}, {Key: "created_at", Value: -1}},
+			Options: options.Index().SetName("idx_comments_post_created"),
+		},
+	}
+	if _, err := commentsColl.Indexes().CreateMany(inCtx, commentIndexes); err != nil {
+		return fmt.Errorf("failed to create comments indexes: %w", err)
+	}
+
+	// 5. Likes collection indexes
+	likesColl := database.Collection("likes")
+	likeIndexes := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "post_id", Value: 1}, {Key: "user_id", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("idx_likes_post_user_unique"),
+		},
+		{
+			Keys:    bson.D{{Key: "post_id", Value: 1}},
+			Options: options.Index().SetName("idx_likes_post_id"),
+		},
+	}
+	if _, err := likesColl.Indexes().CreateMany(inCtx, likeIndexes); err != nil {
+		return fmt.Errorf("failed to create likes indexes: %w", err)
+	}
+
 	return nil
 }
