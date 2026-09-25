@@ -5,6 +5,7 @@ import (
 	"blog-api/internal/authorrequest"
 	"blog-api/internal/comments"
 	"blog-api/internal/likes"
+	"blog-api/internal/media"
 	"blog-api/internal/middleware"
 	"blog-api/internal/posts"
 	"blog-api/internal/user"
@@ -20,6 +21,7 @@ func NewRouter(
 	authorRequestHandler *authorrequest.Handler,
 	commentHandler *comments.Handler,
 	likeHandler *likes.Handler,
+	mediaHandler *media.Handler,
 	pinger HealthPinger,
 	jwtSecret string,
 ) *gin.Engine {
@@ -28,6 +30,8 @@ func NewRouter(
 	router.Use(middleware.CORS())
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
+
+	router.Static("/uploads", "./uploads")
 
 	router.GET("/health", NewHealthHandler(pinger))
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -38,6 +42,7 @@ func NewRouter(
 	{
 		authGroup.POST("/register", userHandler.Register)
 		authGroup.POST("/login", userHandler.Login)
+		authGroup.POST("/refresh", userHandler.RefreshToken)
 		authGroup.POST("/logout", middleware.AuthRequired(jwtSecret), userHandler.Logout)
 	}
 
@@ -48,6 +53,8 @@ func NewRouter(
 
 	{
 		userGroup.GET("/iam", userHandler.Me)
+		userGroup.PATCH("/profile", userHandler.UpdateProfile)
+		userGroup.PATCH("/change-password", userHandler.ChangePassword)
 		userGroup.POST("/author-request", authorRequestHandler.Submit)
 		userGroup.GET("/author-request", authorRequestHandler.GetMyRequest)
 	}
@@ -82,6 +89,7 @@ func NewRouter(
 		authorGroup.GET("/my-posts", postHandler.ListMyPosts)
 		authorGroup.PATCH("/posts/:id", postHandler.UpdatePost)
 		authorGroup.DELETE("/posts/:id", postHandler.DeletePost)
+		authorGroup.POST("/media/upload", mediaHandler.Upload)
 	}
 
 	// admin
