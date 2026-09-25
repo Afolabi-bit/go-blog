@@ -111,6 +111,37 @@ func (h *Handler) GetPostByID(c *gin.Context) {
 	response.Success(c, http.StatusOK, "Post fetched successfully", post)
 }
 
+// GetPostBySlug godoc
+// @Summary      Get a single post by slug
+// @Description  Fetch post details by slug. Published posts are public; draft posts require author or admin credentials.
+// @Tags         posts
+// @Produce      json
+// @Security     BearerAuth
+// @Param        slug path      string true "Post Slug"
+// @Success      200  {object}  response.Response{data=posts.Post}
+// @Failure      403  {object}  response.Response
+// @Failure      404  {object}  response.Response
+// @Router       /api/posts/slug/{slug} [get]
+func (h *Handler) GetPostBySlug(c *gin.Context) {
+	slug := c.Param("slug")
+
+	var requesterIDPtr, requesterRolePtr *string
+	if userID, ok := middleware.GetUserID(c); ok {
+		requesterIDPtr = &userID
+	}
+	if userRole, ok := middleware.GetRole(c); ok {
+		requesterRolePtr = &userRole
+	}
+
+	post, err := h.svc.GetPostBySlug(c.Request.Context(), slug, requesterIDPtr, requesterRolePtr)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Post fetched successfully", post)
+}
+
 // ListPublicPosts godoc
 // @Summary      List published posts
 // @Description  Browse published blog posts with search, tag filtering, and cursor pagination
