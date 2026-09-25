@@ -3,7 +3,9 @@ package media_test
 import (
 	"blog-api/internal/media"
 	"bytes"
+	"context"
 	"errors"
+	"io"
 	"mime/multipart"
 	"os"
 	"testing"
@@ -55,14 +57,25 @@ func createMultipartFile(content []byte, filename string) (multipart.File, *mult
 	return file, files[0], nil
 }
 
-func TestMediaService_SaveFile_Success(t *testing.T) {
+type mockStorage struct {
+	saveFunc func(ctx context.Context, filename string, r io.Reader, size int64, mimeType string) (string, error)
+}
+
+func (m *mockStorage) Save(ctx context.Context, filename string, r io.Reader, size int64, mimeType string) (string, error) {
+	if m.saveFunc != nil {
+		return m.saveFunc(ctx, filename, r, size, mimeType)
+	}
+	return "https://example.com/" + filename, nil
+}
+
+func TestMediaService_SaveFile_LocalStorage_Success(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "test_uploads_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	svc := media.NewService(tempDir)
+	svc := media.NewLocalService(tempDir)
 
 	file, header, err := createMultipartFile(validPNG, "test.png")
 	if err != nil {
@@ -70,7 +83,7 @@ func TestMediaService_SaveFile_Success(t *testing.T) {
 	}
 	defer file.Close()
 
-	res, err := svc.SaveFile(file, header)
+	res, err := svc.SaveFile(context.Background(), file, header)
 	if err != nil {
 		t.Fatalf("unexpected error saving file: %v", err)
 	}
@@ -81,6 +94,34 @@ func TestMediaService_SaveFile_Success(t *testing.T) {
 	if res.Size != int64(len(validPNG)) {
 		t.Errorf("expected size %d, got %d", len(validPNG), res.Size)
 	}
+	if len(res.URL) == 0 {
+		t.Errorf("expected non-empty URL")
+	}
+}
+
+func TestMediaService_SaveFile_CloudStorage_Success(t *testing.T) {
+	mock := &mockStorage{
+		saveFunc: func(ctx context.Context, filename string, r io.Reader, size int64, mimeType string) (string, error) {
+			return "https://pub-r2.dev/" + filename, nil
+		},
+	}
+	svc := media.NewService(mock)
+
+	file, header, err := createMultipartFile(validPNG, "cover.png")
+	if err != nil {
+		t.Fatalf("failed to create multipart file: %v", err)
+	}
+	defer file.Close()
+
+	res, err := svc.SaveFile(context.Background(), file, header)
+	if err != nil {
+		t.Fatalf("unexpected error saving file: %v", err)
+	}
+
+	expectedPrefix := "https://pub-r2.dev/"
+	if res.URL[:len(expectedPrefix)] != expectedPrefix {
+		t.Errorf("expected URL to start with %s, got %s", expectedPrefix, res.URL)
+	}
 }
 
 func TestMediaService_SaveFile_InvalidType(t *testing.T) {
@@ -90,7 +131,7 @@ func TestMediaService_SaveFile_InvalidType(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	svc := media.NewService(tempDir)
+	svc := media.NewLocalService(tempDir)
 
 	textPayload := []byte("<html><body>Not an image</body></html>")
 	file, header, err := createMultipartFile(textPayload, "test.html")
@@ -99,7 +140,7 @@ func TestMediaService_SaveFile_InvalidType(t *testing.T) {
 	}
 	defer file.Close()
 
-	_, err = svc.SaveFile(file, header)
+	_, err = svc.SaveFile(context.Background(), file, header)
 	if !errors.Is(err, media.ErrInvalidFileType) {
 		t.Fatalf("expected ErrInvalidFileType, got: %v", err)
 	}
@@ -112,7 +153,7 @@ func TestMediaService_SaveFile_TooLarge(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	svc := media.NewService(tempDir)
+	svc := media.NewLocalService(tempDir)
 	svc.MaxFileSize = 10 // small limit for testing
 
 	file, header, err := createMultipartFile(validPNG, "test.png")
@@ -121,7 +162,7 @@ func TestMediaService_SaveFile_TooLarge(t *testing.T) {
 	}
 	defer file.Close()
 
-	_, err = svc.SaveFile(file, header)
+	_, err = svc.SaveFile(context.Background(), file, header)
 	if !errors.Is(err, media.ErrFileTooLarge) {
 		t.Fatalf("expected ErrFileTooLarge, got: %v", err)
 	}
