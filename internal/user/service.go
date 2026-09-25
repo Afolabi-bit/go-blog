@@ -63,10 +63,9 @@ func (s *Service) Register(ctx context.Context, input RegisterRequest) (AuthResp
 
 	now := time.Now()
 
-	role := input.Role
-	if role == "" {
-		role = RoleReader
-	}
+	// All registrations default strictly to reader role for security.
+	// Users can apply to become authors through the author-request process.
+	role := RoleReader
 
 	user := User{
 		Email:        email,
