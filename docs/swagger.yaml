@@ -1,5 +1,62 @@
 basePath: /
 definitions:
+  authorrequest.AuthorRequest:
+    properties:
+      bio:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      motivation:
+        type: string
+      review_notes:
+        type: string
+      reviewed_by:
+        type: string
+      sample_links:
+        items:
+          type: string
+        type: array
+      status:
+        type: string
+      updated_at:
+        type: string
+      user_email:
+        type: string
+      user_id:
+        type: string
+      user_name:
+        type: string
+    type: object
+  authorrequest.ReviewRequest:
+    properties:
+      review_notes:
+        maxLength: 500
+        type: string
+      status:
+        type: string
+    required:
+    - status
+    type: object
+  authorrequest.SubmitRequest:
+    properties:
+      bio:
+        maxLength: 1000
+        minLength: 10
+        type: string
+      motivation:
+        maxLength: 2000
+        minLength: 10
+        type: string
+      sample_links:
+        items:
+          type: string
+        type: array
+    required:
+    - bio
+    - motivation
+    type: object
   posts.CreatePostRequest:
     properties:
       content:
@@ -126,6 +183,93 @@ info:
   title: Blog REST API
   version: "1.0"
 paths:
+  /api/admin/author-requests:
+    get:
+      description: Moderation list of author requests across all users (Admin only)
+      parameters:
+      - description: 'Filter by status: pending, approved, rejected'
+        in: query
+        name: status
+        type: string
+      - description: Limit (default 10, max 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: List all author applications
+      tags:
+      - admin
+  /api/admin/author-requests/{id}/review:
+    patch:
+      consumes:
+      - application/json
+      description: Approve or reject a pending author request. Approving automatically
+        elevates user to author role (Admin only).
+      parameters:
+      - description: Author Request ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Review decision and notes
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/authorrequest.ReviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/authorrequest.AuthorRequest'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Review an author application
+      tags:
+      - admin
   /api/admin/posts:
     get:
       description: Lists all posts across all authors and statuses (Admin role required)
@@ -503,6 +647,76 @@ paths:
       summary: Health check
       tags:
       - health
+  /user/author-request:
+    get:
+      description: Retrieves the authenticated user's latest author application and
+        status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/authorrequest.AuthorRequest'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Get current user's author application
+      tags:
+      - author-requests
+    post:
+      consumes:
+      - application/json
+      description: Allows an authenticated reader to apply for author status with
+        a bio and sample portfolio links
+      parameters:
+      - description: Author application details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/authorrequest.SubmitRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/authorrequest.AuthorRequest'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Submit application to become an author
+      tags:
+      - author-requests
   /user/iam:
     get:
       description: Returns details of the currently authenticated user
