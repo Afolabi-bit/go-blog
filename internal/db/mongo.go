@@ -52,3 +52,15 @@ func (m *Mongo) Disconnect(ctx context.Context) error {
 	}
 	return nil
 }
+
+func (m *Mongo) Ping(ctx context.Context) error {
+	if m.Client == nil {
+		return fmt.Errorf("mongo client is not initialized")
+	}
+
+	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	return m.Client.Ping(pingCtx, nil)
+}
+
