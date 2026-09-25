@@ -44,7 +44,7 @@ func (h *Handler) Upload(c *gin.Context) {
 	}
 	defer file.Close()
 
-	uploadRes, err := h.svc.SaveFile(file, header)
+	uploadRes, err := h.svc.SaveFile(c.Request.Context(), file, header)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrFileTooLarge), errors.Is(err, ErrInvalidFileType):
