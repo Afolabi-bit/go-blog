@@ -1,14 +1,13 @@
 package media
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -23,21 +22,28 @@ var allowedMimeTypes = map[string]string{
 const DefaultMaxFileSize int64 = 5 * 1024 * 1024 // 5MB
 
 type Service struct {
-	UploadDir   string
+	storage     Storage
 	MaxFileSize int64
 }
 
-func NewService(uploadDir string) *Service {
-	if uploadDir == "" {
-		uploadDir = "./uploads"
+// NewService creates a media service backed by the provided Storage provider.
+func NewService(storage Storage) *Service {
+	if storage == nil {
+		storage = NewLocalStorage("./uploads")
 	}
 	return &Service{
-		UploadDir:   uploadDir,
+		storage:     storage,
 		MaxFileSize: DefaultMaxFileSize,
 	}
 }
 
-func (s *Service) SaveFile(file multipart.File, header *multipart.FileHeader) (UploadResponse, error) {
+// NewLocalService creates a media service backed by local filesystem storage.
+func NewLocalService(uploadDir string) *Service {
+	return NewService(NewLocalStorage(uploadDir))
+}
+
+// SaveFile validates file size, sniffs MIME type, and saves through the configured storage provider.
+func (s *Service) SaveFile(ctx context.Context, file multipart.File, header *multipart.FileHeader) (UploadResponse, error) {
 	if header.Size > s.MaxFileSize {
 		return UploadResponse{}, ErrFileTooLarge
 	}
@@ -65,32 +71,20 @@ func (s *Service) SaveFile(file multipart.File, header *multipart.FileHeader) (U
 		return UploadResponse{}, fmt.Errorf("failed to seek file: %w", err)
 	}
 
-	// Ensure upload directory exists
-	if err := os.MkdirAll(s.UploadDir, 0755); err != nil {
-		return UploadResponse{}, fmt.Errorf("failed to create upload directory: %w", err)
-	}
-
 	// Generate safe, unique filename
 	randomBytes := make([]byte, 8)
 	_, _ = rand.Read(randomBytes)
 	uniqueName := fmt.Sprintf("%d-%s%s", time.Now().Unix(), hex.EncodeToString(randomBytes), ext)
 
-	destPath := filepath.Join(s.UploadDir, uniqueName)
-	destFile, err := os.Create(destPath)
+	url, err := s.storage.Save(ctx, uniqueName, file, header.Size, detectedMime)
 	if err != nil {
-		return UploadResponse{}, fmt.Errorf("failed to create destination file: %w", err)
-	}
-	defer destFile.Close()
-
-	written, err := io.Copy(destFile, file)
-	if err != nil {
-		return UploadResponse{}, fmt.Errorf("failed to write file content: %w", err)
+		return UploadResponse{}, err
 	}
 
 	return UploadResponse{
-		URL:      "/uploads/" + uniqueName,
+		URL:      url,
 		Filename: uniqueName,
-		Size:     written,
+		Size:     header.Size,
 		MimeType: detectedMime,
 	}, nil
 }
