@@ -1,6 +1,7 @@
 package app
 
 import (
+	"blog-api/internal/authorrequest"
 	"blog-api/internal/config"
 	"blog-api/internal/db"
 	"blog-api/internal/httpserver"
@@ -38,7 +39,11 @@ func NewApp(ctx context.Context) (*App, error) {
 	postService := posts.NewService(postRepo, userRepo)
 	postHandler := posts.NewHandler(postService)
 
-	engine := httpserver.NewRouter(userHandler, postHandler, cfg.JWTSecret)
+	authorRequestRepo := authorrequest.NewRepo(database.Database)
+	authorRequestService := authorrequest.NewService(authorRequestRepo, userRepo)
+	authorRequestHandler := authorrequest.NewHandler(authorRequestService)
+
+	engine := httpserver.NewRouter(userHandler, postHandler, authorRequestHandler, cfg.JWTSecret)
 
 	return &App{
 		Config:   cfg,
