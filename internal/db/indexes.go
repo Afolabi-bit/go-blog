@@ -98,5 +98,26 @@ func EnsureIndexes(ctx context.Context, database *mongo.Database) error {
 		return fmt.Errorf("failed to create likes indexes: %w", err)
 	}
 
+	// 6. Refresh tokens collection indexes
+	refreshTokensColl := database.Collection("refresh_tokens")
+	ttlSeconds := int32(0)
+	refreshTokenIndexes := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "token_hash", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("idx_refresh_tokens_hash_unique"),
+		},
+		{
+			Keys:    bson.D{{Key: "user_id", Value: 1}},
+			Options: options.Index().SetName("idx_refresh_tokens_user_id"),
+		},
+		{
+			Keys:    bson.D{{Key: "expires_at", Value: 1}},
+			Options: options.Index().SetExpireAfterSeconds(ttlSeconds).SetName("idx_refresh_tokens_ttl"),
+		},
+	}
+	if _, err := refreshTokensColl.Indexes().CreateMany(inCtx, refreshTokenIndexes); err != nil {
+		return fmt.Errorf("failed to create refresh_tokens indexes: %w", err)
+	}
+
 	return nil
 }
