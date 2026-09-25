@@ -16,14 +16,16 @@ func NewRouter(
 	userHandler *user.Handler,
 	postHandler *posts.Handler,
 	authorRequestHandler *authorrequest.Handler,
+	pinger HealthPinger,
 	jwtSecret string,
 ) *gin.Engine {
 	router := gin.New()
 	router.HandleMethodNotAllowed = true
+	router.Use(middleware.CORS())
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
-	router.GET("/health", health)
+	router.GET("/health", NewHealthHandler(pinger))
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// auth
@@ -51,6 +53,7 @@ func NewRouter(
 	postGroup.Use(middleware.AuthOptional(jwtSecret))
 	{
 		postGroup.GET("", postHandler.ListPublicPosts)
+		postGroup.GET("/slug/:slug", postHandler.GetPostBySlug)
 		postGroup.GET("/:id", postHandler.GetPostByID)
 	}
 
