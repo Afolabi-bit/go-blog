@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -29,6 +30,8 @@ func EnsureIndexes(ctx context.Context, database *mongo.Database) error {
 
 	// 2. Posts collection indexes
 	postsColl := database.Collection("posts")
+	_ = deduplicatePostSlugs(inCtx, postsColl)
+
 	postIndexes := []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "slug", Value: 1}},
@@ -120,4 +123,44 @@ func EnsureIndexes(ctx context.Context, database *mongo.Database) error {
 	}
 
 	return nil
+}
+
+// deduplicatePostSlugs ensures all existing posts have distinct slugs before building the unique index.
+func deduplicatePostSlugs(ctx context.Context, postsColl *mongo.Collection) error {
+	pipeline := mongo.Pipeline{
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$slug"},
+			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
+			{Key: "ids", Value: bson.D{{Key: "$push", Value: "$_id"}}},
+		}}},
+		{{Key: "$match", Value: bson.D{
+			{Key: "_id", Value: bson.D{{Key: "$nin", Value: bson.A{nil, ""}}}},
+			{Key: "count", Value: bson.D{{Key: "$gt", Value: 1}}},
+		}}},
+	}
+
+	cursor, err := postsColl.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+	defer cursor.Close(ctx)
+
+	for cursor.Next(ctx) {
+		var group struct {
+			Slug string               `bson:"_id"`
+			IDs  []primitive.ObjectID `bson:"ids"`
+		}
+		if err := cursor.Decode(&group); err != nil {
+			return err
+		}
+
+		for i := 1; i < len(group.IDs); i++ {
+			newSlug := fmt.Sprintf("%s-%d", group.Slug, i)
+			_, _ = postsColl.UpdateOne(ctx,
+				bson.M{"_id": group.IDs[i]},
+				bson.M{"$set": bson.M{"slug": newSlug}},
+			)
+		}
+	}
+	return cursor.Err()
 }
