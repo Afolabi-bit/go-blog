@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	_ "blog-api/docs"
+	"blog-api/internal/authorrequest"
 	"blog-api/internal/middleware"
 	"blog-api/internal/posts"
 	"blog-api/internal/user"
@@ -11,7 +12,12 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-func NewRouter(userHandler *user.Handler, postHandler *posts.Handler, jwtSecret string) *gin.Engine {
+func NewRouter(
+	userHandler *user.Handler,
+	postHandler *posts.Handler,
+	authorRequestHandler *authorrequest.Handler,
+	jwtSecret string,
+) *gin.Engine {
 	router := gin.New()
 	router.HandleMethodNotAllowed = true
 	router.Use(gin.Logger())
@@ -36,6 +42,8 @@ func NewRouter(userHandler *user.Handler, postHandler *posts.Handler, jwtSecret 
 
 	{
 		userGroup.GET("/iam", userHandler.Me)
+		userGroup.POST("/author-request", authorRequestHandler.Submit)
+		userGroup.GET("/author-request", authorRequestHandler.GetMyRequest)
 	}
 
 	// posts
@@ -66,6 +74,8 @@ func NewRouter(userHandler *user.Handler, postHandler *posts.Handler, jwtSecret 
 	{
 		adminGroup.GET("/posts", postHandler.ListAllAdmin)
 		adminGroup.DELETE("/posts/:id", postHandler.DeletePost)
+		adminGroup.GET("/author-requests", authorRequestHandler.List)
+		adminGroup.PATCH("/author-requests/:id/review", authorRequestHandler.Review)
 	}
 	return router
 }
