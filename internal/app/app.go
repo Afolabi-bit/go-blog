@@ -1,12 +1,14 @@
 package app
 
 import (
+	"blog-api/internal/auth"
 	"blog-api/internal/authorrequest"
 	"blog-api/internal/comments"
 	"blog-api/internal/config"
 	"blog-api/internal/db"
 	"blog-api/internal/httpserver"
 	"blog-api/internal/likes"
+	"blog-api/internal/media"
 	"blog-api/internal/posts"
 	"blog-api/internal/user"
 	"context"
@@ -37,8 +39,10 @@ func NewApp(ctx context.Context) (*App, error) {
 		return nil, fmt.Errorf("failed to initialize database indexes: %w", err)
 	}
 
+	sessionRepo := auth.NewSessionRepo(database.Database)
+
 	userRepo := user.NewRepo(database.Database)
-	userService := user.NewService(userRepo, cfg.JWTSecret)
+	userService := user.NewService(userRepo, sessionRepo, cfg.JWTSecret)
 	userHandler := user.NewHandler(userService)
 
 	postRepo := posts.NewRepo(database.Database)
@@ -57,7 +61,10 @@ func NewApp(ctx context.Context) (*App, error) {
 	likeService := likes.NewService(likeRepo, postRepo)
 	likeHandler := likes.NewHandler(likeService)
 
-	engine := httpserver.NewRouter(userHandler, postHandler, authorRequestHandler, commentHandler, likeHandler, database, cfg.JWTSecret)
+	mediaService := media.NewService("./uploads")
+	mediaHandler := media.NewHandler(mediaService)
+
+	engine := httpserver.NewRouter(userHandler, postHandler, authorRequestHandler, commentHandler, likeHandler, mediaHandler, database, cfg.JWTSecret)
 
 	return &App{
 		Config:   cfg,
