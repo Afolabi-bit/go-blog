@@ -15,13 +15,14 @@ const (
 )
 
 type Post struct {
-	ID         primitive.ObjectID `json:"id" bson:"_id,omitempty"`
-	AuthorID   primitive.ObjectID `json:"author_id" bson:"author_id,omitempty"`
-	AuthorName string             `json:"author_name" bson:"author_name"`
-	Title      string             `json:"title" bson:"title"`
-	Slug       string             `json:"slug" bson:"slug"`
-	Content    string             `json:"content" bson:"content"`
-	Status     string             `json:"status" bson:"status"`
+	ID            primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	AuthorID      primitive.ObjectID `json:"author_id" bson:"author_id,omitempty"`
+	AuthorName    string             `json:"author_name" bson:"author_name"`
+	Title         string             `json:"title" bson:"title"`
+	Slug          string             `json:"slug" bson:"slug"`
+	Content       string             `json:"content" bson:"content"`
+	CoverImage    string             `json:"cover_image,omitempty" bson:"cover_image,omitempty"`
+	Status        string             `json:"status" bson:"status"`
 	Tags          []string           `json:"tags" bson:"tags"`
 	LikesCount    int64              `json:"likes_count" bson:"likes_count"`
 	CommentsCount int64              `json:"comments_count" bson:"comments_count"`
@@ -30,17 +31,19 @@ type Post struct {
 }
 
 type CreatePostRequest struct {
-	Title   string   `json:"title"`
-	Content string   `json:"content"`
-	Status  string   `json:"status"`
-	Tags    []string `json:"tags"`
+	Title      string   `json:"title"`
+	Content    string   `json:"content"`
+	CoverImage string   `json:"cover_image,omitempty"`
+	Status     string   `json:"status"`
+	Tags       []string `json:"tags"`
 }
 
 type UpdatePostRequest struct {
-	Title   *string   `json:"title" binding:"omitempty"`
-	Content *string   `json:"content" binding:"omitempty"`
-	Status  *string   `json:"status" binding:"omitempty"`
-	Tags    *[]string `json:"tags" binding:"omitempty"`
+	Title      *string   `json:"title" binding:"omitempty"`
+	Content    *string   `json:"content" binding:"omitempty"`
+	CoverImage *string   `json:"cover_image" binding:"omitempty"`
+	Status     *string   `json:"status" binding:"omitempty"`
+	Tags       *[]string `json:"tags" binding:"omitempty"`
 }
 
 type PostFilter struct {
