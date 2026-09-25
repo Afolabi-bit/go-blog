@@ -210,6 +210,39 @@ func (r *Repo) GetByID(ctx context.Context, postID primitive.ObjectID) (Post, er
 	return post, nil
 }
 
+func (r *Repo) GetBySlug(ctx context.Context, slug string) (Post, error) {
+	query := bson.M{"slug": slug}
+
+	inCtx, cancel := context.WithTimeout(ctx, time.Second*10)
+	defer cancel()
+
+	var post Post
+
+	err := r.coll.FindOne(inCtx, query).Decode(&post)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return Post{}, mongo.ErrNoDocuments
+		}
+		return Post{}, fmt.Errorf("failed to find post by slug: %w", err)
+	}
+
+	return post, nil
+}
+
+func (r *Repo) ExistsBySlug(ctx context.Context, slug string) (bool, error) {
+	query := bson.M{"slug": slug}
+
+	inCtx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+
+	count, err := r.coll.CountDocuments(inCtx, query)
+	if err != nil {
+		return false, fmt.Errorf("failed to check slug existence: %w", err)
+	}
+
+	return count > 0, nil
+}
+
 func (r *Repo) Update(ctx context.Context, postID primitive.ObjectID, authorID *primitive.ObjectID, update UpdatePostRequest) (Post, error) {
 	query := bson.M{"_id": postID}
 
