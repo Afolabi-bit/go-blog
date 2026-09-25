@@ -31,12 +31,30 @@ var (
 	ErrInvalidID    = errors.New("invalid post id format")
 )
 
-type Service struct {
-	repo *Repo
-	user *user.Repo
+type Repository interface {
+	CreatePost(ctx context.Context, post Post) (Post, error)
+	GetByID(ctx context.Context, postID primitive.ObjectID) (Post, error)
+	GetBySlug(ctx context.Context, slug string) (Post, error)
+	ExistsBySlug(ctx context.Context, slug string) (bool, error)
+	ListPublished(ctx context.Context, nextCursor string, limit int64, filter PostFilter) ([]Post, error)
+	ListByAuthor(ctx context.Context, authorID primitive.ObjectID, nextCursor string, limit int64) ([]Post, error)
+	ListAllAdmin(ctx context.Context, nextCursor string, maxLimit int64, filter PostFilter) ([]Post, error)
+	Update(ctx context.Context, postID primitive.ObjectID, authorID *primitive.ObjectID, update UpdatePostRequest) (Post, error)
+	Delete(ctx context.Context, postID primitive.ObjectID, authorID *primitive.ObjectID) error
+	IncrementCommentsCount(ctx context.Context, postID primitive.ObjectID, delta int64) error
+	IncrementLikesCount(ctx context.Context, postID primitive.ObjectID, delta int64) error
 }
 
-func NewService(repo *Repo, user *user.Repo) *Service {
+type UserRepo interface {
+	FinduserByID(ctx context.Context, id string) (user.User, error)
+}
+
+type Service struct {
+	repo Repository
+	user UserRepo
+}
+
+func NewService(repo Repository, user UserRepo) *Service {
 	return &Service{
 		repo: repo,
 		user: user,
