@@ -22,9 +22,11 @@ type Post struct {
 	Slug       string             `json:"slug" bson:"slug"`
 	Content    string             `json:"content" bson:"content"`
 	Status     string             `json:"status" bson:"status"`
-	Tags       []string           `json:"tags" bson:"tags"`
-	CreatedAt  time.Time          `json:"created_at" bson:"created_at"`
-	UpdatedAt  time.Time          `json:"updated_at" bson:"updated_at"`
+	Tags          []string           `json:"tags" bson:"tags"`
+	LikesCount    int64              `json:"likes_count" bson:"likes_count"`
+	CommentsCount int64              `json:"comments_count" bson:"comments_count"`
+	CreatedAt     time.Time          `json:"created_at" bson:"created_at"`
+	UpdatedAt     time.Time          `json:"updated_at" bson:"updated_at"`
 }
 
 type CreatePostRequest struct {
