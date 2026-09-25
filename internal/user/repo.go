@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -77,4 +78,25 @@ func (r *Repo) CreateUser(ctx context.Context, user User) (User, error) {
 
 	user.ID = id
 	return user, nil
+}
+
+func (r *Repo) UpdateRole(ctx context.Context, userID primitive.ObjectID, newRole string) error {
+	filter := bson.M{"_id": userID}
+	update := bson.M{
+		"$set": bson.M{
+			"role":       newRole,
+			"updated_at": time.Now(),
+		},
+	}
+
+	result, err := r.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return fmt.Errorf("update user role failed: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return nil
 }
