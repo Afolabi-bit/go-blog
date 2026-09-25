@@ -315,3 +315,46 @@ func (r *Repo) Delete(ctx context.Context, postID primitive.ObjectID, authorID *
 
 	return nil
 }
+
+func (r *Repo) IncrementCommentsCount(ctx context.Context, postID primitive.ObjectID, delta int64) error {
+	inCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	filter := bson.M{"_id": postID}
+	update := bson.M{
+		"$inc": bson.M{"comments_count": delta},
+	}
+
+	result, err := r.coll.UpdateOne(inCtx, filter, update)
+	if err != nil {
+		return fmt.Errorf("failed to increment comments count: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return nil
+}
+
+func (r *Repo) IncrementLikesCount(ctx context.Context, postID primitive.ObjectID, delta int64) error {
+	inCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	filter := bson.M{"_id": postID}
+	update := bson.M{
+		"$inc": bson.M{"likes_count": delta},
+	}
+
+	result, err := r.coll.UpdateOne(inCtx, filter, update)
+	if err != nil {
+		return fmt.Errorf("failed to increment likes count: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return nil
+}
+
