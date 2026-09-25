@@ -548,6 +548,41 @@ paths:
       summary: Update a post
       tags:
       - posts
+  /api/posts/slug/{slug}:
+    get:
+      description: Fetch post details by slug. Published posts are public; draft posts
+        require author or admin credentials.
+      parameters:
+      - description: Post Slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/posts.Post'
+              type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Get a single post by slug
+      tags:
+      - posts
   /auth/login:
     post:
       consumes:
@@ -635,12 +670,17 @@ paths:
       - auth
   /health:
     get:
-      description: Check service availability and system time
+      description: Check service availability, database connectivity, and system time
       produces:
       - application/json
       responses:
         "200":
           description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
           schema:
             additionalProperties: true
             type: object
