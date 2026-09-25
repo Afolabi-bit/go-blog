@@ -105,6 +105,7 @@ func (s *Service) CreateNewPost(ctx context.Context, authorID primitive.ObjectID
 		Title:      title,
 		Slug:       slug,
 		Content:    content,
+		CoverImage: strings.TrimSpace(input.CoverImage),
 		Status:     input.Status,
 		Tags:       input.Tags,
 		CreatedAt:  now,
