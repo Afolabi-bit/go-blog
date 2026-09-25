@@ -61,7 +61,22 @@ func NewApp(ctx context.Context) (*App, error) {
 	likeService := likes.NewService(likeRepo, postRepo)
 	likeHandler := likes.NewHandler(likeService)
 
-	mediaService := media.NewService("./uploads")
+	var mediaStorage media.Storage = media.NewLocalStorage("./uploads")
+	if cfg.HasR2() {
+		r2Storage, err := media.NewR2Storage(ctx, media.R2StorageConfig{
+			AccountID:       cfg.R2AccountID,
+			AccessKeyID:     cfg.R2AccessKeyID,
+			SecretAccessKey: cfg.R2SecretAccessKey,
+			BucketName:      cfg.R2BucketName,
+			PublicURL:       cfg.R2PublicURL,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize Cloudflare R2 storage: %w", err)
+		}
+		mediaStorage = r2Storage
+	}
+
+	mediaService := media.NewService(mediaStorage)
 	mediaHandler := media.NewHandler(mediaService)
 
 	engine := httpserver.NewRouter(userHandler, postHandler, authorRequestHandler, commentHandler, likeHandler, mediaHandler, database, cfg.JWTSecret)
