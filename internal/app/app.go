@@ -31,6 +31,10 @@ func NewApp(ctx context.Context) (*App, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
+	if err := db.EnsureIndexes(ctx, database.Database); err != nil {
+		return nil, fmt.Errorf("failed to initialize database indexes: %w", err)
+	}
+
 	userRepo := user.NewRepo(database.Database)
 	userService := user.NewService(userRepo, cfg.JWTSecret)
 	userHandler := user.NewHandler(userService)
@@ -43,7 +47,7 @@ func NewApp(ctx context.Context) (*App, error) {
 	authorRequestService := authorrequest.NewService(authorRequestRepo, userRepo)
 	authorRequestHandler := authorrequest.NewHandler(authorRequestService)
 
-	engine := httpserver.NewRouter(userHandler, postHandler, authorRequestHandler, cfg.JWTSecret)
+	engine := httpserver.NewRouter(userHandler, postHandler, authorRequestHandler, database, cfg.JWTSecret)
 
 	return &App{
 		Config:   cfg,
