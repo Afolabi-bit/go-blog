@@ -57,6 +57,43 @@ definitions:
     - bio
     - motivation
     type: object
+  comments.Comment:
+    properties:
+      author_id:
+        type: string
+      author_name:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      parent_id:
+        type: string
+      post_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  comments.CreateCommentRequest:
+    properties:
+      content:
+        maxLength: 2000
+        minLength: 1
+        type: string
+      parent_id:
+        type: string
+    required:
+    - content
+    type: object
+  likes.LikeStatus:
+    properties:
+      liked:
+        type: boolean
+      likes_count:
+        type: integer
+    type: object
   posts.CreatePostRequest:
     properties:
       content:
@@ -76,12 +113,16 @@ definitions:
         type: string
       author_name:
         type: string
+      comments_count:
+        type: integer
       content:
         type: string
       created_at:
         type: string
       id:
         type: string
+      likes_count:
+        type: integer
       slug:
         type: string
       status:
@@ -314,6 +355,43 @@ paths:
       summary: Admin post moderation list
       tags:
       - admin
+  /api/comments/{id}:
+    delete:
+      description: Deletes a comment (Comment author, Post author, or Admin)
+      parameters:
+      - description: Comment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Delete a comment
+      tags:
+      - comments
   /api/my-posts:
     get:
       description: Lists all posts created by the authenticated author, including
@@ -546,6 +624,159 @@ paths:
       security:
       - BearerAuth: []
       summary: Update a post
+      tags:
+      - posts
+  /api/posts/{id}/comments:
+    get:
+      description: Browse paginated comments on a published post
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        type: string
+      - description: Number of comments to return (default 10, max 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: List comments on a post
+      tags:
+      - comments
+    post:
+      consumes:
+      - application/json
+      description: Add a new comment or nested reply to a published post (authenticated
+        users)
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Comment payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/comments.CreateCommentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/comments.Comment'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Add a comment to a post
+      tags:
+      - comments
+  /api/posts/{id}/like:
+    get:
+      description: Check whether the current user liked the post and get total likes
+        count
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/likes.LikeStatus'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Get like status for a post
+      tags:
+      - posts
+    post:
+      description: Likes a post if not currently liked, or removes the like if already
+        liked (authenticated users)
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/likes.LikeStatus'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Toggle like on a post
       tags:
       - posts
   /api/posts/slug/{slug}:
