@@ -264,6 +264,9 @@ func (r *Repo) Update(ctx context.Context, postID primitive.ObjectID, authorID *
 	if update.Tags != nil {
 		fields["tags"] = *update.Tags
 	}
+	if update.CoverImage != nil {
+		fields["cover_image"] = strings.TrimSpace(*update.CoverImage)
+	}
 
 	updatedFields := bson.M{
 		"$set": fields,
