@@ -2,9 +2,11 @@ package app
 
 import (
 	"blog-api/internal/authorrequest"
+	"blog-api/internal/comments"
 	"blog-api/internal/config"
 	"blog-api/internal/db"
 	"blog-api/internal/httpserver"
+	"blog-api/internal/likes"
 	"blog-api/internal/posts"
 	"blog-api/internal/user"
 	"context"
@@ -47,7 +49,15 @@ func NewApp(ctx context.Context) (*App, error) {
 	authorRequestService := authorrequest.NewService(authorRequestRepo, userRepo)
 	authorRequestHandler := authorrequest.NewHandler(authorRequestService)
 
-	engine := httpserver.NewRouter(userHandler, postHandler, authorRequestHandler, database, cfg.JWTSecret)
+	commentRepo := comments.NewRepo(database.Database)
+	commentService := comments.NewService(commentRepo, postRepo, userRepo)
+	commentHandler := comments.NewHandler(commentService)
+
+	likeRepo := likes.NewRepo(database.Database)
+	likeService := likes.NewService(likeRepo, postRepo)
+	likeHandler := likes.NewHandler(likeService)
+
+	engine := httpserver.NewRouter(userHandler, postHandler, authorRequestHandler, commentHandler, likeHandler, database, cfg.JWTSecret)
 
 	return &App{
 		Config:   cfg,
