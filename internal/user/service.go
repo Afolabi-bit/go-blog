@@ -7,19 +7,38 @@ import (
 	"fmt"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
 )
 
-type Service struct {
-	repo      *Repo
-	jwtSecret string
+type SessionRepository interface {
+	StoreToken(ctx context.Context, userID primitive.ObjectID, rawToken string, ttl time.Duration) error
+	ValidateAndRotate(ctx context.Context, rawToken string, newRawToken string, newTTL time.Duration) (primitive.ObjectID, error)
+	RevokeToken(ctx context.Context, rawToken string) error
+	RevokeAllForUser(ctx context.Context, userID primitive.ObjectID) error
 }
 
-func NewService(repo *Repo, jwtSecret string) *Service {
+type UserRepository interface {
+	FindUserByEmail(ctx context.Context, email string) (User, error)
+	FinduserByID(ctx context.Context, id string) (User, error)
+	CreateUser(ctx context.Context, user User) (User, error)
+	UpdateRole(ctx context.Context, userID primitive.ObjectID, newRole string) error
+	UpdateProfile(ctx context.Context, userID primitive.ObjectID, req UpdateProfileRequest) (User, error)
+	UpdatePassword(ctx context.Context, userID primitive.ObjectID, newPasswordHash string) error
+}
+
+type Service struct {
+	repo        UserRepository
+	sessionRepo SessionRepository
+	jwtSecret   string
+}
+
+func NewService(repo UserRepository, sessionRepo SessionRepository, jwtSecret string) *Service {
 	return &Service{
-		repo:      repo,
-		jwtSecret: jwtSecret,
+		repo:        repo,
+		sessionRepo: sessionRepo,
+		jwtSecret:   jwtSecret,
 	}
 }
 
@@ -84,14 +103,19 @@ func (s *Service) Register(ctx context.Context, input RegisterRequest) (AuthResp
 	}
 
 	token, err := auth.CreateToken(s.jwtSecret, createdUser.ID.Hex(), createdUser.Email, createdUser.Role)
-
 	if err != nil {
 		return AuthResponse{}, err
 	}
 
+	refreshToken, err := auth.GenerateRefreshToken()
+	if err == nil && s.sessionRepo != nil {
+		_ = s.sessionRepo.StoreToken(ctx, createdUser.ID, refreshToken, 7*24*time.Hour)
+	}
+
 	return AuthResponse{
-		Token: token,
-		User:  ToPublic(createdUser),
+		Token:        token,
+		RefreshToken: refreshToken,
+		User:         ToPublic(createdUser),
 	}, nil
 }
 
@@ -125,15 +149,68 @@ func (s *Service) Login(ctx context.Context, input LoginRequest) (AuthResponse, 
 	}
 
 	token, err := auth.CreateToken(s.jwtSecret, user.ID.Hex(), user.Email, user.Role)
+	if err != nil {
+		return AuthResponse{}, err
+	}
 
+	refreshToken, err := auth.GenerateRefreshToken()
+	if err == nil && s.sessionRepo != nil {
+		_ = s.sessionRepo.StoreToken(ctx, user.ID, refreshToken, 7*24*time.Hour)
+	}
+
+	return AuthResponse{
+		Token:        token,
+		RefreshToken: refreshToken,
+		User:         ToPublic(user),
+	}, nil
+}
+
+func (s *Service) RefreshToken(ctx context.Context, rawRefreshToken string) (AuthResponse, error) {
+	if s.sessionRepo == nil {
+		return AuthResponse{}, auth.ErrInvalidToken
+	}
+
+	newRefreshToken, err := auth.GenerateRefreshToken()
+	if err != nil {
+		return AuthResponse{}, fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	userID, err := s.sessionRepo.ValidateAndRotate(ctx, rawRefreshToken, newRefreshToken, 7*24*time.Hour)
+	if err != nil {
+		return AuthResponse{}, err
+	}
+
+	u, err := s.repo.FinduserByID(ctx, userID.Hex())
+	if err != nil {
+		return AuthResponse{}, err
+	}
+
+	token, err := auth.CreateToken(s.jwtSecret, u.ID.Hex(), u.Email, u.Role)
 	if err != nil {
 		return AuthResponse{}, err
 	}
 
 	return AuthResponse{
-		Token: token,
-		User:  ToPublic(user),
+		Token:        token,
+		RefreshToken: newRefreshToken,
+		User:         ToPublic(u),
 	}, nil
+}
+
+func (s *Service) Logout(ctx context.Context, userID string, rawRefreshToken *string) error {
+	if s.sessionRepo == nil {
+		return nil
+	}
+
+	if rawRefreshToken != nil && *rawRefreshToken != "" {
+		_ = s.sessionRepo.RevokeToken(ctx, *rawRefreshToken)
+	}
+
+	if uID, err := primitive.ObjectIDFromHex(userID); err == nil {
+		_ = s.sessionRepo.RevokeAllForUser(ctx, uID)
+	}
+
+	return nil
 }
 
 func (s *Service) GetProfile(ctx context.Context, userID string) (PublicUser, error) {
@@ -147,4 +224,60 @@ func (s *Service) GetProfile(ctx context.Context, userID string) (PublicUser, er
 	}
 
 	return ToPublic(user), nil
+}
+
+func (s *Service) UpdateProfile(ctx context.Context, userID string, input UpdateProfileRequest) (PublicUser, error) {
+	uID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return PublicUser{}, ErrInvalidInput
+	}
+
+	updated, err := s.repo.UpdateProfile(ctx, uID, input)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return PublicUser{}, ErrUserNotFound
+		}
+		return PublicUser{}, err
+	}
+
+	return ToPublic(updated), nil
+}
+
+func (s *Service) ChangePassword(ctx context.Context, userID string, input ChangePasswordRequest) error {
+	uID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return ErrInvalidInput
+	}
+
+	if len(input.NewPassword) < 6 {
+		return fmt.Errorf("%w: new password must be at least 6 characters", ErrInvalidInput)
+	}
+
+	u, err := s.repo.FinduserByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(input.OldPassword)); err != nil {
+		return ErrInvalidCredentials
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	if err := s.repo.UpdatePassword(ctx, uID, string(hashed)); err != nil {
+		return err
+	}
+
+	// Revoke sessions on password change for security
+	if s.sessionRepo != nil {
+		_ = s.sessionRepo.RevokeAllForUser(ctx, uID)
+	}
+
+	return nil
 }
