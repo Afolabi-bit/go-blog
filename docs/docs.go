@@ -1956,7 +1956,7 @@ var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
 	Host:             "localhost:5000",
 	BasePath:         "/",
-	Schemes:          []string{},
+	Schemes:          []string{"http", "https"},
 	Title:            "Blog REST API",
 	Description:      "A multi-tenant Blog API with JWT authentication and Role-Based Access Control (RBAC).",
 	InfoInstanceName: "swagger",

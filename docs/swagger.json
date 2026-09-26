@@ -1,4 +1,8 @@
 {
+    "schemes": [
+        "http",
+        "https"
+    ],
     "swagger": "2.0",
     "info": {
         "description": "A multi-tenant Blog API with JWT authentication and Role-Based Access Control (RBAC).",
