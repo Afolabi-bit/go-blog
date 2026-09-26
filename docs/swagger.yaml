@@ -1224,7 +1224,6 @@ paths:
       - user
 schemes:
 - http
-- https
 securityDefinitions:
   BearerAuth:
     description: 'Type "Bearer" followed by a space and your JWT token. Example: "Bearer
