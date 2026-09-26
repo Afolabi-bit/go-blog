@@ -34,7 +34,11 @@ func NewRouter(
 	router.Static("/uploads", "./uploads")
 
 	router.GET("/health", NewHealthHandler(pinger))
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	// Swagger UI — the wildcard handler intercepts swagger-initializer.js and
+	// doc.json to inject a requestInterceptor that forces http on localhost.
+	swaggerHandler := ginSwagger.WrapHandler(swaggerFiles.Handler)
+	router.GET("/swagger/*any", newSwaggerRouter(swaggerHandler))
 
 	// auth
 	authGroup := router.Group("/auth")
