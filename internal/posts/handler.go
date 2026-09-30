@@ -163,7 +163,12 @@ func (h *Handler) ListPublicPosts(c *gin.Context) {
 		return
 	}
 
-	posts, meta, err := h.svc.ListPublicPosts(c.Request.Context(), filter.Cursor, filter.Limit, filter)
+	var requesterIDPtr *string
+	if userID, ok := middleware.GetUserID(c); ok {
+		requesterIDPtr = &userID
+	}
+
+	posts, meta, err := h.svc.ListPublicPosts(c.Request.Context(), filter.Cursor, filter.Limit, filter, requesterIDPtr)
 
 	if err != nil {
 		h.handleError(c, err)
@@ -357,3 +362,122 @@ func (h *Handler) DeletePost(c *gin.Context) {
 
 	response.Success(c, http.StatusOK, "Post successfully deleted", nil)
 }
+
+// GetAuthorProfile godoc
+// @Summary      Get public author profile
+// @Description  Retrieve public profile, bio, avatar, and post statistics for an author
+// @Tags         authors
+// @Produce      json
+// @Param        id path string true "Author User ID"
+// @Success      200 {object} response.Response{data=posts.AuthorProfile}
+// @Failure      400 {object} response.Response
+// @Failure      404 {object} response.Response
+// @Router       /api/authors/{id} [get]
+func (h *Handler) GetAuthorProfile(c *gin.Context) {
+	authorID := c.Param("id")
+	profile, err := h.svc.GetAuthorProfile(c.Request.Context(), authorID)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, "Author profile fetched successfully", profile)
+}
+
+// GetTags godoc
+// @Summary      Get tags with post counts
+// @Description  Retrieve all tags used across published posts sorted by usage count
+// @Tags         posts
+// @Produce      json
+// @Success      200 {object} response.Response{data=[]posts.TagItem}
+// @Router       /api/tags [get]
+func (h *Handler) GetTags(c *gin.Context) {
+	tags, err := h.svc.GetTags(c.Request.Context())
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, "Tags fetched successfully", tags)
+}
+
+// GetAuthorStats godoc
+// @Summary      Get author dashboard statistics
+// @Description  Retrieve aggregated totals for posts, published, drafts, likes, and comments
+// @Tags         posts
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200 {object} response.Response{data=posts.AuthorStats}
+// @Failure      401 {object} response.Response
+// @Router       /api/my-posts/stats [get]
+func (h *Handler) GetAuthorStats(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	userObjID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	stats, err := h.svc.GetAuthorStats(c.Request.Context(), userObjID)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Author stats fetched successfully", stats)
+}
+
+// SetFeatured godoc
+// @Summary      Set or unset post as featured
+// @Description  Designate a post as the site's featured post (Admin only)
+// @Tags         admin
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id      path string                    true "Post ID"
+// @Param        request body posts.SetFeaturedRequest  true "Featured payload"
+// @Success      200     {object} response.Response{data=posts.Post}
+// @Failure      400     {object} response.Response
+// @Failure      401     {object} response.Response
+// @Failure      403     {object} response.Response
+// @Failure      404     {object} response.Response
+// @Router       /api/admin/posts/{id}/feature [patch]
+func (h *Handler) SetFeatured(c *gin.Context) {
+	postID := c.Param("id")
+
+	var req SetFeaturedRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	post, err := h.svc.SetFeatured(c.Request.Context(), postID, req.IsFeatured)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Featured post updated successfully", post)
+}
+
+// GetFeaturedPost godoc
+// @Summary      Get the featured post
+// @Description  Retrieve the currently active featured published post
+// @Tags         posts
+// @Produce      json
+// @Success      200 {object} response.Response{data=posts.Post}
+// @Failure      404 {object} response.Response
+// @Router       /api/posts/featured [get]
+func (h *Handler) GetFeaturedPost(c *gin.Context) {
+	post, err := h.svc.GetFeaturedPost(c.Request.Context())
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Featured post fetched successfully", post)
+}
+
