@@ -138,3 +138,39 @@ func (h *Handler) DeleteComment(c *gin.Context) {
 
 	response.Success(c, http.StatusOK, "Comment deleted successfully", nil)
 }
+
+// ListAdminComments godoc
+// @Summary      Admin comment moderation listing
+// @Description  List all comments across the platform with filtering by post, author, and content search (Admin only)
+// @Tags         admin
+// @Produce      json
+// @Security     BearerAuth
+// @Param        post_id   query string false "Filter by Post ID"
+// @Param        author_id query string false "Filter by Author ID"
+// @Param        search    query string false "Search content keywords"
+// @Param        cursor    query string false "Pagination cursor"
+// @Param        limit     query int    false "Limit (default 10, max 20)"
+// @Success      200       {object} response.Response
+// @Failure      400       {object} response.Response
+// @Failure      401       {object} response.Response
+// @Failure      403       {object} response.Response
+// @Router       /api/admin/comments [get]
+func (h *Handler) ListAdminComments(c *gin.Context) {
+	var filter AdminCommentFilter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		response.Error(c, http.StatusBadRequest, "invalid query parameters")
+		return
+	}
+
+	commentsList, meta, err := h.svc.ListAllAdmin(c.Request.Context(), filter.Cursor, filter.Limit, filter)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Comments fetched successfully", gin.H{
+		"comments":   commentsList,
+		"pagination": meta,
+	})
+}
+
