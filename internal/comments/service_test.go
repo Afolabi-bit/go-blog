@@ -14,10 +14,14 @@ import (
 )
 
 type mockCommentRepo struct {
-	createFunc       func(ctx context.Context, c comments.Comment) (comments.Comment, error)
-	findByIDFunc     func(ctx context.Context, id primitive.ObjectID) (comments.Comment, error)
-	listByPostIDFunc func(ctx context.Context, postID primitive.ObjectID, nextCursor string, limit int64) ([]comments.Comment, error)
-	deleteFunc       func(ctx context.Context, id primitive.ObjectID) error
+	createFunc            func(ctx context.Context, c comments.Comment) (comments.Comment, error)
+	findByIDFunc          func(ctx context.Context, id primitive.ObjectID) (comments.Comment, error)
+	listByPostIDFunc      func(ctx context.Context, postID primitive.ObjectID, nextCursor string, limit int64) ([]comments.Comment, error)
+	listRootCommentsFunc  func(ctx context.Context, postID primitive.ObjectID, nextCursor string, limit int64) ([]comments.Comment, error)
+	listRepliesFunc       func(ctx context.Context, postID primitive.ObjectID, parentIDs []primitive.ObjectID) ([]comments.Comment, error)
+	listAllAdminFunc      func(ctx context.Context, nextCursor string, limit int64, filter comments.AdminCommentFilter) ([]comments.Comment, error)
+	deleteFunc            func(ctx context.Context, id primitive.ObjectID) error
+	deleteRepliesByParent func(ctx context.Context, parentID primitive.ObjectID) (int64, error)
 }
 
 func (m *mockCommentRepo) Create(ctx context.Context, c comments.Comment) (comments.Comment, error) {
@@ -42,11 +46,39 @@ func (m *mockCommentRepo) ListByPostID(ctx context.Context, postID primitive.Obj
 	return []comments.Comment{}, nil
 }
 
+func (m *mockCommentRepo) ListRootComments(ctx context.Context, postID primitive.ObjectID, nextCursor string, limit int64) ([]comments.Comment, error) {
+	if m.listRootCommentsFunc != nil {
+		return m.listRootCommentsFunc(ctx, postID, nextCursor, limit)
+	}
+	return []comments.Comment{}, nil
+}
+
+func (m *mockCommentRepo) ListReplies(ctx context.Context, postID primitive.ObjectID, parentIDs []primitive.ObjectID) ([]comments.Comment, error) {
+	if m.listRepliesFunc != nil {
+		return m.listRepliesFunc(ctx, postID, parentIDs)
+	}
+	return []comments.Comment{}, nil
+}
+
+func (m *mockCommentRepo) ListAllAdmin(ctx context.Context, nextCursor string, limit int64, filter comments.AdminCommentFilter) ([]comments.Comment, error) {
+	if m.listAllAdminFunc != nil {
+		return m.listAllAdminFunc(ctx, nextCursor, limit, filter)
+	}
+	return []comments.Comment{}, nil
+}
+
 func (m *mockCommentRepo) Delete(ctx context.Context, id primitive.ObjectID) error {
 	if m.deleteFunc != nil {
 		return m.deleteFunc(ctx, id)
 	}
 	return nil
+}
+
+func (m *mockCommentRepo) DeleteRepliesByParentID(ctx context.Context, parentID primitive.ObjectID) (int64, error) {
+	if m.deleteRepliesByParent != nil {
+		return m.deleteRepliesByParent(ctx, parentID)
+	}
+	return 0, nil
 }
 
 type mockPostRepo struct {
@@ -224,3 +256,87 @@ func TestDeleteComment_Authorization(t *testing.T) {
 		})
 	}
 }
+
+func TestListComments_NestedReplies(t *testing.T) {
+	postID := primitive.NewObjectID()
+	root1ID := primitive.NewObjectID()
+	reply1ID := primitive.NewObjectID()
+
+	rootComment := comments.Comment{
+		ID:         root1ID,
+		PostID:     postID,
+		Content:    "Root comment",
+		CreatedAt:  time.Now(),
+		AuthorName: "Alice",
+	}
+
+	replyComment := comments.Comment{
+		ID:         reply1ID,
+		PostID:     postID,
+		ParentID:   &root1ID,
+		Content:    "Reply to root",
+		CreatedAt:  time.Now().Add(time.Minute),
+		AuthorName: "Bob",
+	}
+
+	repo := &mockCommentRepo{
+		listRootCommentsFunc: func(ctx context.Context, pid primitive.ObjectID, cursor string, limit int64) ([]comments.Comment, error) {
+			return []comments.Comment{rootComment}, nil
+		},
+		listRepliesFunc: func(ctx context.Context, pid primitive.ObjectID, parentIDs []primitive.ObjectID) ([]comments.Comment, error) {
+			return []comments.Comment{replyComment}, nil
+		},
+	}
+
+	svc := comments.NewService(repo, &mockPostRepo{}, &mockUserRepo{})
+
+	tree, meta, err := svc.ListComments(context.Background(), postID.Hex(), "", 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(tree) != 1 {
+		t.Fatalf("expected 1 root comment, got %d", len(tree))
+	}
+	if len(tree[0].Replies) != 1 {
+		t.Fatalf("expected 1 nested reply, got %d", len(tree[0].Replies))
+	}
+	if tree[0].Replies[0].Content != "Reply to root" {
+		t.Errorf("expected reply content 'Reply to root', got '%s'", tree[0].Replies[0].Content)
+	}
+	if meta.Count != 1 {
+		t.Errorf("expected count 1, got %d", meta.Count)
+	}
+}
+
+func TestListAllAdmin_ModerationQueue(t *testing.T) {
+	postID := primitive.NewObjectID()
+	cID := primitive.NewObjectID()
+
+	repo := &mockCommentRepo{
+		listAllAdminFunc: func(ctx context.Context, cursor string, limit int64, filter comments.AdminCommentFilter) ([]comments.Comment, error) {
+			return []comments.Comment{
+				{
+					ID:      cID,
+					PostID:  postID,
+					Content: "Spam comment under review",
+				},
+			}, nil
+		},
+	}
+
+	svc := comments.NewService(repo, &mockPostRepo{}, &mockUserRepo{})
+
+	items, meta, err := svc.ListAllAdmin(context.Background(), "", 10, comments.AdminCommentFilter{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item in admin queue, got %d", len(items))
+	}
+	if meta.Count != 1 {
+		t.Errorf("expected count 1, got %d", meta.Count)
+	}
+}
+
