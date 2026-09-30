@@ -43,15 +43,26 @@ type Repository interface {
 	Delete(ctx context.Context, postID primitive.ObjectID, authorID *primitive.ObjectID) error
 	IncrementCommentsCount(ctx context.Context, postID primitive.ObjectID, delta int64) error
 	IncrementLikesCount(ctx context.Context, postID primitive.ObjectID, delta int64) error
+	CountPublishedByAuthor(ctx context.Context, authorID primitive.ObjectID) (int64, error)
+	GetTags(ctx context.Context) ([]TagItem, error)
+	GetAuthorStats(ctx context.Context, authorID primitive.ObjectID) (AuthorStats, error)
+	SetFeatured(ctx context.Context, postID primitive.ObjectID, isFeatured bool) (Post, error)
+	GetFeaturedPost(ctx context.Context) (Post, error)
 }
 
 type UserRepo interface {
 	FinduserByID(ctx context.Context, id string) (user.User, error)
 }
 
+type LikesRepo interface {
+	FindLikedPostIDs(ctx context.Context, postIDs []primitive.ObjectID, userID primitive.ObjectID) (map[primitive.ObjectID]bool, error)
+	FindLike(ctx context.Context, postID, userID primitive.ObjectID) (bool, error)
+}
+
 type Service struct {
-	repo Repository
-	user UserRepo
+	repo  Repository
+	user  UserRepo
+	likes LikesRepo
 }
 
 func NewService(repo Repository, user UserRepo) *Service {
@@ -59,6 +70,11 @@ func NewService(repo Repository, user UserRepo) *Service {
 		repo: repo,
 		user: user,
 	}
+}
+
+func (s *Service) WithLikesRepo(likes LikesRepo) *Service {
+	s.likes = likes
+	return s
 }
 
 func generateSlug(title string) string {
@@ -164,10 +180,18 @@ func (s *Service) GetPostByID(ctx context.Context, postID string, requesterID *s
 		requesterObjID, err := primitive.ObjectIDFromHex(*requesterID)
 
 		if err == nil && requesterObjID == post.AuthorID {
+			post.ReadTime = CalculateReadTime(post.Content)
 			return post, nil
 		}
 
 		return Post{}, ErrForbidden
+	}
+
+	post.ReadTime = CalculateReadTime(post.Content)
+	if requesterID != nil && s.likes != nil {
+		if userObjID, err := primitive.ObjectIDFromHex(*requesterID); err == nil {
+			post.LikedByMe, _ = s.likes.FindLike(ctx, post.ID, userObjID)
+		}
 	}
 
 	return post, nil
@@ -190,27 +214,55 @@ func (s *Service) GetPostBySlug(ctx context.Context, slug string, requesterID *s
 		}
 
 		if *requesterRole == RoleAdmin {
+			post.ReadTime = CalculateReadTime(post.Content)
 			return post, nil
 		}
 
 		requesterObjID, err := primitive.ObjectIDFromHex(*requesterID)
 		if err == nil && requesterObjID == post.AuthorID {
+			post.ReadTime = CalculateReadTime(post.Content)
 			return post, nil
 		}
 
 		return Post{}, ErrForbidden
 	}
 
+	post.ReadTime = CalculateReadTime(post.Content)
+	if requesterID != nil && s.likes != nil {
+		if userObjID, err := primitive.ObjectIDFromHex(*requesterID); err == nil {
+			post.LikedByMe, _ = s.likes.FindLike(ctx, post.ID, userObjID)
+		}
+	}
+
 	return post, nil
 }
 
-func (s *Service) ListPublicPosts(ctx context.Context, nextCursor string, limit int64, filter PostFilter) ([]Post, PaginationMeta, error) {
+func (s *Service) ListPublicPosts(ctx context.Context, nextCursor string, limit int64, filter PostFilter, requesterID *string) ([]PostListItem, PaginationMeta, error) {
 	limit = clampLimit(limit)
 
 	posts, err := s.repo.ListPublished(ctx, nextCursor, limit, filter)
-
 	if err != nil {
-		return []Post{}, PaginationMeta{}, err
+		return []PostListItem{}, PaginationMeta{}, err
+	}
+
+	var likedMap map[primitive.ObjectID]bool
+	if requesterID != nil && s.likes != nil && len(posts) > 0 {
+		if userObjID, err := primitive.ObjectIDFromHex(*requesterID); err == nil {
+			postIDs := make([]primitive.ObjectID, len(posts))
+			for i, p := range posts {
+				postIDs[i] = p.ID
+			}
+			likedMap, _ = s.likes.FindLikedPostIDs(ctx, postIDs, userObjID)
+		}
+	}
+
+	items := make([]PostListItem, len(posts))
+	for i, p := range posts {
+		liked := false
+		if likedMap != nil {
+			liked = likedMap[p.ID]
+		}
+		items[i] = ToPostListItem(p, liked)
 	}
 
 	var nextCursorStr string
@@ -224,25 +276,29 @@ func (s *Service) ListPublicPosts(ctx context.Context, nextCursor string, limit 
 		Limit:      limit,
 		HasNext:    hasNext,
 		NextCursor: nextCursorStr,
-		Count:      int64(len(posts)),
+		Count:      int64(len(items)),
 	}
 
-	return posts, pMeta, nil
+	return items, pMeta, nil
 }
 
-func (s *Service) ListMyPosts(ctx context.Context, authorID primitive.ObjectID, nextCursor string, limit int64) ([]Post, PaginationMeta, error) {
+func (s *Service) ListMyPosts(ctx context.Context, authorID primitive.ObjectID, nextCursor string, limit int64) ([]PostListItem, PaginationMeta, error) {
 	limit = clampLimit(limit)
 
 	posts, err := s.repo.ListByAuthor(ctx, authorID, nextCursor, limit)
-
 	if err != nil {
-		return []Post{}, PaginationMeta{}, err
+		return []PostListItem{}, PaginationMeta{}, err
+	}
+
+	items := make([]PostListItem, len(posts))
+	for i, p := range posts {
+		items[i] = ToPostListItem(p, false)
 	}
 
 	hasNext := int64(len(posts)) == limit
 
 	var nextCursorStr string
-	if hasNext {
+	if hasNext && len(posts) > 0 {
 		nextCursorStr = posts[len(posts)-1].ID.Hex()
 	}
 
@@ -250,25 +306,29 @@ func (s *Service) ListMyPosts(ctx context.Context, authorID primitive.ObjectID, 
 		Limit:      limit,
 		HasNext:    hasNext,
 		NextCursor: nextCursorStr,
-		Count:      int64(len(posts)),
+		Count:      int64(len(items)),
 	}
 
-	return posts, pMeta, nil
+	return items, pMeta, nil
 }
 
-func (s *Service) ListAllAdmin(ctx context.Context, nextCursor string, limit int64, filter PostFilter) ([]Post, PaginationMeta, error) {
+func (s *Service) ListAllAdmin(ctx context.Context, nextCursor string, limit int64, filter PostFilter) ([]PostListItem, PaginationMeta, error) {
 	limit = clampLimit(limit)
 
 	posts, err := s.repo.ListAllAdmin(ctx, nextCursor, limit, filter)
-
 	if err != nil {
-		return []Post{}, PaginationMeta{}, err
+		return []PostListItem{}, PaginationMeta{}, err
+	}
+
+	items := make([]PostListItem, len(posts))
+	for i, p := range posts {
+		items[i] = ToPostListItem(p, false)
 	}
 
 	hasNext := int64(len(posts)) == limit
 
 	var nextCursorStr string
-	if hasNext {
+	if hasNext && len(posts) > 0 {
 		nextCursorStr = posts[len(posts)-1].ID.Hex()
 	}
 
@@ -276,10 +336,10 @@ func (s *Service) ListAllAdmin(ctx context.Context, nextCursor string, limit int
 		Limit:      limit,
 		HasNext:    hasNext,
 		NextCursor: nextCursorStr,
-		Count:      int64(len(posts)),
+		Count:      int64(len(items)),
 	}
 
-	return posts, pMeta, nil
+	return items, pMeta, nil
 }
 
 func (s *Service) UpdatePost(ctx context.Context, postID string, requesterID primitive.ObjectID, requesterRole string, input UpdatePostRequest) (Post, error) {
@@ -361,3 +421,62 @@ func (s *Service) DeletePost(ctx context.Context, postID string, requesterID pri
 
 	return nil
 }
+
+func (s *Service) GetAuthorProfile(ctx context.Context, authorID string) (AuthorProfile, error) {
+	objID, err := primitive.ObjectIDFromHex(authorID)
+	if err != nil {
+		return AuthorProfile{}, ErrInvalidID
+	}
+
+	u, err := s.user.FinduserByID(ctx, authorID)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return AuthorProfile{}, ErrNotFound
+		}
+		return AuthorProfile{}, err
+	}
+
+	totalPosts, err := s.repo.CountPublishedByAuthor(ctx, objID)
+	if err != nil {
+		totalPosts = 0
+	}
+
+	return AuthorProfile{
+		ID:         u.ID.Hex(),
+		FullName:   u.FirstName + " " + u.LastName,
+		Bio:        u.Bio,
+		AvatarURL:  u.AvatarURL,
+		Role:       u.Role,
+		TotalPosts: totalPosts,
+		CreatedAt:  u.CreatedAt,
+	}, nil
+}
+
+func (s *Service) GetTags(ctx context.Context) ([]TagItem, error) {
+	return s.repo.GetTags(ctx)
+}
+
+func (s *Service) GetAuthorStats(ctx context.Context, authorID primitive.ObjectID) (AuthorStats, error) {
+	return s.repo.GetAuthorStats(ctx, authorID)
+}
+
+func (s *Service) SetFeatured(ctx context.Context, postID string, isFeatured bool) (Post, error) {
+	objID, err := primitive.ObjectIDFromHex(postID)
+	if err != nil {
+		return Post{}, ErrInvalidID
+	}
+	return s.repo.SetFeatured(ctx, objID, isFeatured)
+}
+
+func (s *Service) GetFeaturedPost(ctx context.Context) (Post, error) {
+	post, err := s.repo.GetFeaturedPost(ctx)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return Post{}, ErrNotFound
+		}
+		return Post{}, err
+	}
+	post.ReadTime = CalculateReadTime(post.Content)
+	return post, nil
+}
+
