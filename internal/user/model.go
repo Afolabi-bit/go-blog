@@ -1,6 +1,7 @@
 package user
 
 import (
+	"encoding/json"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -52,9 +53,31 @@ func ToPublic(u User) PublicUser {
 type RegisterRequest struct {
 	Email     string `json:"email" form:"email" validate:"required,email"`
 	Password  string `json:"password" form:"password" validate:"required,min=6"`
-	FirstName string `json:"firstName" form:"firstName" validate:"required,min=3"`
-	LastName  string `json:"lastName" form:"lastName" validate:"required,min=3"`
-	Role      string `json:"role,omitempty" form:"role"`
+	FirstName string `json:"first_name" form:"first_name" validate:"required,min=2"`
+	LastName  string `json:"last_name" form:"last_name" validate:"required,min=2"`
+	Role      string `json:"role,omitempty" form:"role"` // Server unconditionally creates reader
+}
+
+// UnmarshalJSON supports both snake_case (first_name, last_name) and legacy camelCase (firstName, lastName)
+func (r *RegisterRequest) UnmarshalJSON(data []byte) error {
+	type Alias RegisterRequest
+	aux := struct {
+		*Alias
+		LegacyFirstName string `json:"firstName"`
+		LegacyLastName  string `json:"lastName"`
+	}{
+		Alias: (*Alias)(r),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if r.FirstName == "" && aux.LegacyFirstName != "" {
+		r.FirstName = aux.LegacyFirstName
+	}
+	if r.LastName == "" && aux.LegacyLastName != "" {
+		r.LastName = aux.LegacyLastName
+	}
+	return nil
 }
 
 type LoginRequest struct {
