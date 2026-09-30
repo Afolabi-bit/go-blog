@@ -3,6 +3,7 @@ package user_test
 import (
 	"blog-api/internal/user"
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -253,3 +254,65 @@ func TestRefreshToken_Success(t *testing.T) {
 		t.Errorf("expected non-empty rotated refresh token")
 	}
 }
+
+func TestRegister_RoleLockedToReader(t *testing.T) {
+	var createdUser user.User
+	userRepo := &mockUserRepo{
+		findUserByEmailFunc: func(ctx context.Context, email string) (user.User, error) {
+			return user.User{}, mongo.ErrNoDocuments
+		},
+		createUserFunc: func(ctx context.Context, u user.User) (user.User, error) {
+			createdUser = u
+			createdUser.ID = primitive.NewObjectID()
+			return createdUser, nil
+		},
+	}
+
+	svc := user.NewService(userRepo, &mockSessionRepo{}, "secret123")
+
+	// Attempt privilege self-escalation by requesting admin role
+	req := user.RegisterRequest{
+		Email:     "admin-wannabe@test.com",
+		Password:  "password123",
+		FirstName: "Super",
+		LastName:  "Admin",
+		Role:      "admin",
+	}
+
+	res, err := svc.Register(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error during registration: %v", err)
+	}
+
+	if createdUser.Role != user.RoleReader {
+		t.Errorf("expected created user to have role '%s', got '%s'", user.RoleReader, createdUser.Role)
+	}
+	if res.User.Role != user.RoleReader {
+		t.Errorf("expected response user to have role '%s', got '%s'", user.RoleReader, res.User.Role)
+	}
+}
+
+func TestRegisterRequest_JSONUnmarshaling(t *testing.T) {
+	t.Run("Standard snake_case payload", func(t *testing.T) {
+		payload := `{"email":"test@example.com","password":"secret","first_name":"Jane","last_name":"Doe"}`
+		var req user.RegisterRequest
+		if err := json.Unmarshal([]byte(payload), &req); err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+		if req.FirstName != "Jane" || req.LastName != "Doe" {
+			t.Errorf("expected Jane Doe, got %s %s", req.FirstName, req.LastName)
+		}
+	})
+
+	t.Run("Legacy camelCase payload", func(t *testing.T) {
+		payload := `{"email":"test@example.com","password":"secret","firstName":"Legacy","lastName":"Caller"}`
+		var req user.RegisterRequest
+		if err := json.Unmarshal([]byte(payload), &req); err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+		if req.FirstName != "Legacy" || req.LastName != "Caller" {
+			t.Errorf("expected Legacy Caller, got %s %s", req.FirstName, req.LastName)
+		}
+	})
+}
+
