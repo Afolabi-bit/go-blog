@@ -46,7 +46,11 @@ func NewApp(ctx context.Context) (*App, error) {
 	userHandler := user.NewHandler(userService)
 
 	postRepo := posts.NewRepo(database.Database)
-	postService := posts.NewService(postRepo, userRepo)
+	likeRepo := likes.NewRepo(database.Database)
+	likeService := likes.NewService(likeRepo, postRepo)
+	likeHandler := likes.NewHandler(likeService)
+
+	postService := posts.NewService(postRepo, userRepo).WithLikesRepo(likeRepo)
 	postHandler := posts.NewHandler(postService)
 
 	authorRequestRepo := authorrequest.NewRepo(database.Database)
@@ -56,10 +60,6 @@ func NewApp(ctx context.Context) (*App, error) {
 	commentRepo := comments.NewRepo(database.Database)
 	commentService := comments.NewService(commentRepo, postRepo, userRepo)
 	commentHandler := comments.NewHandler(commentService)
-
-	likeRepo := likes.NewRepo(database.Database)
-	likeService := likes.NewService(likeRepo, postRepo)
-	likeHandler := likes.NewHandler(likeService)
 
 	var mediaStorage media.Storage = media.NewLocalStorage("./uploads")
 	if cfg.HasR2() {
