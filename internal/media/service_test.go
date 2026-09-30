@@ -167,3 +167,27 @@ func TestMediaService_SaveFile_TooLarge(t *testing.T) {
 		t.Fatalf("expected ErrFileTooLarge, got: %v", err)
 	}
 }
+
+func TestMediaService_SaveAvatar_Success(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_avatar_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	svc := media.NewLocalService(tempDir)
+	file, header, err := createMultipartFile(validPNG, "avatar.png")
+	if err != nil {
+		t.Fatalf("failed to create multipart file: %v", err)
+	}
+	defer file.Close()
+
+	res, err := svc.SaveAvatar(context.Background(), file, header)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.URL == "" {
+		t.Errorf("expected non-empty avatar URL")
+	}
+}
+
