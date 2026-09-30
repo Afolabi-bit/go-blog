@@ -12,6 +12,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+const (
+	ReapplicationCooldown = 7 * 24 * time.Hour
+)
+
 func clampLimit(limit int64) int64 {
 	if limit <= 0 {
 		return 10
@@ -70,6 +74,25 @@ func (s *Service) Submit(ctx context.Context, userID string, input SubmitRequest
 		return AuthorRequest{}, ErrPendingExists
 	}
 	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		return AuthorRequest{}, err
+	}
+
+	latest, err := s.repo.FindLatestByUserID(ctx, userObjID)
+	if err == nil {
+		if latest.Status == StatusPending {
+			return AuthorRequest{}, ErrPendingExists
+		}
+		if latest.Status == StatusRejected {
+			cooldownEnds := latest.UpdatedAt.Add(ReapplicationCooldown)
+			if time.Now().Before(cooldownEnds) {
+				msg := fmt.Sprintf("%v: previous request was rejected. You may reapply after %s", ErrCooldownActive, cooldownEnds.UTC().Format("2006-01-02 15:04 UTC"))
+				if latest.ReviewNotes != "" {
+					msg = fmt.Sprintf("%s (Feedback: %s)", msg, latest.ReviewNotes)
+				}
+				return AuthorRequest{}, errors.New(msg)
+			}
+		}
+	} else if !errors.Is(err, mongo.ErrNoDocuments) {
 		return AuthorRequest{}, err
 	}
 
