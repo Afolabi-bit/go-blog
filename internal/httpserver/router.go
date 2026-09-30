@@ -59,28 +59,35 @@ func NewRouter(
 		userGroup.GET("/iam", userHandler.Me)
 		userGroup.PATCH("/profile", userHandler.UpdateProfile)
 		userGroup.PATCH("/change-password", userHandler.ChangePassword)
+		userGroup.POST("/avatar", mediaHandler.UploadAvatar)
 		userGroup.POST("/author-request", authorRequestHandler.Submit)
 		userGroup.GET("/author-request", authorRequestHandler.GetMyRequest)
 	}
+
+	// public discovery
+	router.GET("/api/authors/:id", postHandler.GetAuthorProfile)
+	router.GET("/api/tags", postHandler.GetTags)
 
 	// posts & public read
 	postGroup := router.Group("/api/posts")
 	postGroup.Use(middleware.AuthOptional(jwtSecret))
 	{
 		postGroup.GET("", postHandler.ListPublicPosts)
+		postGroup.GET("/featured", postHandler.GetFeaturedPost)
 		postGroup.GET("/slug/:slug", postHandler.GetPostBySlug)
 		postGroup.GET("/:id", postHandler.GetPostByID)
 		postGroup.GET("/:id/comments", commentHandler.ListComments)
 		postGroup.GET("/:id/like", likeHandler.GetStatus)
 	}
 
-	// authenticated user engagement (comments, likes)
+	// authenticated user engagement (comments, likes, avatar)
 	engagementGroup := router.Group("/api")
 	engagementGroup.Use(middleware.AuthRequired(jwtSecret))
 	{
 		engagementGroup.POST("/posts/:id/comments", commentHandler.AddComment)
 		engagementGroup.DELETE("/comments/:id", commentHandler.DeleteComment)
 		engagementGroup.POST("/posts/:id/like", likeHandler.ToggleLike)
+		engagementGroup.POST("/media/avatar", mediaHandler.UploadAvatar)
 	}
 
 	// author
@@ -91,6 +98,7 @@ func NewRouter(
 	{
 		authorGroup.POST("/posts", postHandler.CreatePost)
 		authorGroup.GET("/my-posts", postHandler.ListMyPosts)
+		authorGroup.GET("/my-posts/stats", postHandler.GetAuthorStats)
 		authorGroup.PATCH("/posts/:id", postHandler.UpdatePost)
 		authorGroup.DELETE("/posts/:id", postHandler.DeletePost)
 		authorGroup.POST("/media/upload", mediaHandler.Upload)
@@ -103,7 +111,9 @@ func NewRouter(
 
 	{
 		adminGroup.GET("/posts", postHandler.ListAllAdmin)
+		adminGroup.PATCH("/posts/:id/feature", postHandler.SetFeatured)
 		adminGroup.DELETE("/posts/:id", postHandler.DeletePost)
+		adminGroup.GET("/comments", commentHandler.ListAdminComments)
 		adminGroup.GET("/author-requests", authorRequestHandler.List)
 		adminGroup.PATCH("/author-requests/:id/review", authorRequestHandler.Review)
 	}
