@@ -56,10 +56,19 @@ func (r *Repo) ListPublished(ctx context.Context, nextCursor string, limit int64
 		query["_id"] = bson.M{"$lt": objID}
 	}
 
+	if strings.TrimSpace(filter.AuthorID) != "" {
+		if authorObjID, err := primitive.ObjectIDFromHex(strings.TrimSpace(filter.AuthorID)); err == nil {
+			query["author_id"] = authorObjID
+		}
+	}
+
 	if strings.TrimSpace(filter.Search) != "" {
 		searchStr := strings.TrimSpace(filter.Search)
-
-		query["title"] = bson.M{"$regex": searchStr, "$options": "i"}
+		query["$or"] = []bson.M{
+			{"title": bson.M{"$regex": searchStr, "$options": "i"}},
+			{"content": bson.M{"$regex": searchStr, "$options": "i"}},
+			{"tags": bson.M{"$regex": searchStr, "$options": "i"}},
+		}
 	}
 
 	if strings.TrimSpace(filter.Tag) != "" {
@@ -144,8 +153,19 @@ func (r *Repo) ListAllAdmin(ctx context.Context, nextCursor string, maxLimit int
 		query["status"] = strings.TrimSpace(filter.Status)
 	}
 
+	if strings.TrimSpace(filter.AuthorID) != "" {
+		if authorObjID, err := primitive.ObjectIDFromHex(strings.TrimSpace(filter.AuthorID)); err == nil {
+			query["author_id"] = authorObjID
+		}
+	}
+
 	if strings.TrimSpace(filter.Search) != "" {
-		query["title"] = bson.M{"$regex": strings.TrimSpace(filter.Search), "$options": "i"}
+		searchStr := strings.TrimSpace(filter.Search)
+		query["$or"] = []bson.M{
+			{"title": bson.M{"$regex": searchStr, "$options": "i"}},
+			{"content": bson.M{"$regex": searchStr, "$options": "i"}},
+			{"tags": bson.M{"$regex": searchStr, "$options": "i"}},
+		}
 	}
 
 	if strings.TrimSpace(filter.Tag) != "" {
@@ -211,7 +231,12 @@ func (r *Repo) GetByID(ctx context.Context, postID primitive.ObjectID) (Post, er
 }
 
 func (r *Repo) GetBySlug(ctx context.Context, slug string) (Post, error) {
-	query := bson.M{"slug": slug}
+	query := bson.M{
+		"$or": []bson.M{
+			{"slug": slug},
+			{"previous_slugs": slug},
+		},
+	}
 
 	inCtx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
@@ -360,4 +385,137 @@ func (r *Repo) IncrementLikesCount(ctx context.Context, postID primitive.ObjectI
 
 	return nil
 }
+
+func (r *Repo) CountPublishedByAuthor(ctx context.Context, authorID primitive.ObjectID) (int64, error) {
+	inCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	return r.coll.CountDocuments(inCtx, bson.M{
+		"author_id": authorID,
+		"status":    StatusPublished,
+	})
+}
+
+func (r *Repo) GetTags(ctx context.Context) ([]TagItem, error) {
+	inCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"status": StatusPublished}}},
+		{{Key: "$unwind", Value: "$tags"}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$tags"},
+			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
+		{{Key: "$sort", Value: bson.D{
+			{Key: "count", Value: -1},
+			{Key: "_id", Value: 1},
+		}}},
+		{{Key: "$project", Value: bson.D{
+			{Key: "name", Value: "$_id"},
+			{Key: "count", Value: 1},
+			{Key: "_id", Value: 0},
+		}}},
+	}
+
+	cursor, err := r.coll.Aggregate(inCtx, pipeline)
+	if err != nil {
+		return nil, fmt.Errorf("failed to aggregate tags: %w", err)
+	}
+	defer cursor.Close(inCtx)
+
+	var tags []TagItem
+	if err := cursor.All(inCtx, &tags); err != nil {
+		return nil, fmt.Errorf("failed to decode tags: %w", err)
+	}
+	if tags == nil {
+		tags = []TagItem{}
+	}
+	return tags, nil
+}
+
+func (r *Repo) GetAuthorStats(ctx context.Context, authorID primitive.ObjectID) (AuthorStats, error) {
+	inCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"author_id": authorID}}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: nil},
+			{Key: "total_posts", Value: bson.D{{Key: "$sum", Value: 1}}},
+			{Key: "published_posts", Value: bson.D{{Key: "$sum", Value: bson.D{
+				{Key: "$cond", Value: bson.A{bson.M{"$eq": bson.A{"$status", StatusPublished}}, 1, 0}},
+			}}}},
+			{Key: "draft_posts", Value: bson.D{{Key: "$sum", Value: bson.D{
+				{Key: "$cond", Value: bson.A{bson.M{"$eq": bson.A{"$status", StatusDraft}}, 1, 0}},
+			}}}},
+			{Key: "total_likes", Value: bson.D{{Key: "$sum", Value: "$likes_count"}}},
+			{Key: "total_comments", Value: bson.D{{Key: "$sum", Value: "$comments_count"}}},
+		}}},
+	}
+
+	cursor, err := r.coll.Aggregate(inCtx, pipeline)
+	if err != nil {
+		return AuthorStats{}, fmt.Errorf("failed to aggregate author stats: %w", err)
+	}
+	defer cursor.Close(inCtx)
+
+	var stats []AuthorStats
+	if err := cursor.All(inCtx, &stats); err != nil {
+		return AuthorStats{}, fmt.Errorf("failed to decode author stats: %w", err)
+	}
+
+	if len(stats) == 0 {
+		return AuthorStats{}, nil
+	}
+	return stats[0], nil
+}
+
+func (r *Repo) SetFeatured(ctx context.Context, postID primitive.ObjectID, isFeatured bool) (Post, error) {
+	inCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	if isFeatured {
+		// Clear featured flag on any previously featured post
+		_, _ = r.coll.UpdateMany(inCtx, bson.M{"is_featured": true}, bson.M{"$set": bson.M{"is_featured": false}})
+	}
+
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	var post Post
+	err := r.coll.FindOneAndUpdate(inCtx,
+		bson.M{"_id": postID},
+		bson.M{"$set": bson.M{"is_featured": isFeatured, "updated_at": time.Now()}},
+		opts,
+	).Decode(&post)
+
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return Post{}, mongo.ErrNoDocuments
+		}
+		return Post{}, fmt.Errorf("failed to set featured post: %w", err)
+	}
+
+	return post, nil
+}
+
+func (r *Repo) GetFeaturedPost(ctx context.Context) (Post, error) {
+	inCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var post Post
+	err := r.coll.FindOne(inCtx, bson.M{
+		"is_featured": true,
+		"status":      StatusPublished,
+	}).Decode(&post)
+
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return Post{}, mongo.ErrNoDocuments
+		}
+		return Post{}, fmt.Errorf("failed to find featured post: %w", err)
+	}
+
+	return post, nil
+}
+
 
