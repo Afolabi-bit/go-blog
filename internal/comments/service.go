@@ -26,7 +26,11 @@ type Repository interface {
 	Create(ctx context.Context, comment Comment) (Comment, error)
 	FindByID(ctx context.Context, id primitive.ObjectID) (Comment, error)
 	ListByPostID(ctx context.Context, postID primitive.ObjectID, nextCursor string, limit int64) ([]Comment, error)
+	ListRootComments(ctx context.Context, postID primitive.ObjectID, nextCursor string, limit int64) ([]Comment, error)
+	ListReplies(ctx context.Context, postID primitive.ObjectID, parentIDs []primitive.ObjectID) ([]Comment, error)
+	ListAllAdmin(ctx context.Context, nextCursor string, limit int64, filter AdminCommentFilter) ([]Comment, error)
 	Delete(ctx context.Context, id primitive.ObjectID) error
+	DeleteRepliesByParentID(ctx context.Context, parentID primitive.ObjectID) (int64, error)
 }
 
 type PostRepo interface {
@@ -141,7 +145,7 @@ func (s *Service) AddComment(ctx context.Context, postIDStr string, authorIDStr 
 	return created, nil
 }
 
-func (s *Service) ListComments(ctx context.Context, postIDStr string, cursor string, limit int64) ([]Comment, PaginationMeta, error) {
+func (s *Service) ListComments(ctx context.Context, postIDStr string, cursor string, limit int64) ([]CommentResponse, PaginationMeta, error) {
 	postID, err := primitive.ObjectIDFromHex(postIDStr)
 	if err != nil {
 		return nil, PaginationMeta{}, ErrInvalidID
@@ -149,7 +153,63 @@ func (s *Service) ListComments(ctx context.Context, postIDStr string, cursor str
 
 	limit = clampLimit(limit)
 
-	comments, err := s.repo.ListByPostID(ctx, postID, cursor, limit)
+	roots, err := s.repo.ListRootComments(ctx, postID, cursor, limit)
+	if err != nil {
+		return nil, PaginationMeta{}, err
+	}
+
+	rootIDs := make([]primitive.ObjectID, len(roots))
+	for i, r := range roots {
+		rootIDs[i] = r.ID
+	}
+
+	replies, _ := s.repo.ListReplies(ctx, postID, rootIDs)
+	repliesByParent := make(map[primitive.ObjectID][]Comment)
+	for _, reply := range replies {
+		if reply.ParentID != nil {
+			repliesByParent[*reply.ParentID] = append(repliesByParent[*reply.ParentID], reply)
+		}
+	}
+
+	responses := make([]CommentResponse, len(roots))
+	for i, r := range roots {
+		childReplies := repliesByParent[r.ID]
+		if childReplies == nil {
+			childReplies = []Comment{}
+		}
+		responses[i] = CommentResponse{
+			ID:         r.ID,
+			PostID:     r.PostID,
+			AuthorID:   r.AuthorID,
+			AuthorName: r.AuthorName,
+			ParentID:   r.ParentID,
+			Content:    r.Content,
+			Replies:    childReplies,
+			CreatedAt:  r.CreatedAt,
+			UpdatedAt:  r.UpdatedAt,
+		}
+	}
+
+	hasNext := int64(len(roots)) == limit
+	var nextCursor string
+	if hasNext && len(roots) > 0 {
+		nextCursor = roots[len(roots)-1].ID.Hex()
+	}
+
+	meta := PaginationMeta{
+		Limit:      limit,
+		HasNext:    hasNext,
+		NextCursor: nextCursor,
+		Count:      int64(len(responses)),
+	}
+
+	return responses, meta, nil
+}
+
+func (s *Service) ListAllAdmin(ctx context.Context, cursor string, limit int64, filter AdminCommentFilter) ([]Comment, PaginationMeta, error) {
+	limit = clampLimit(limit)
+
+	comments, err := s.repo.ListAllAdmin(ctx, cursor, limit, filter)
 	if err != nil {
 		return nil, PaginationMeta{}, err
 	}
@@ -213,6 +273,9 @@ func (s *Service) performDelete(ctx context.Context, comment Comment) error {
 		return err
 	}
 
-	_ = s.postRepo.IncrementCommentsCount(ctx, comment.PostID, -1)
+	deletedReplies, _ := s.repo.DeleteRepliesByParentID(ctx, comment.ID)
+	totalDeleted := int64(1) + deletedReplies
+
+	_ = s.postRepo.IncrementCommentsCount(ctx, comment.PostID, -totalDeleted)
 	return nil
 }
