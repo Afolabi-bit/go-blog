@@ -33,3 +33,24 @@ type PaginationMeta struct {
 	NextCursor string `json:"next_cursor,omitempty"`
 	Count      int64  `json:"count,omitempty"`
 }
+
+type CommentResponse struct {
+	ID         primitive.ObjectID  `json:"id" bson:"_id,omitempty"`
+	PostID     primitive.ObjectID  `json:"post_id" bson:"post_id"`
+	AuthorID   primitive.ObjectID  `json:"author_id" bson:"author_id"`
+	AuthorName string              `json:"author_name" bson:"author_name"`
+	ParentID   *primitive.ObjectID `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
+	Content    string              `json:"content" bson:"content"`
+	Replies    []Comment           `json:"replies"`
+	CreatedAt  time.Time           `json:"created_at" bson:"created_at"`
+	UpdatedAt  time.Time           `json:"updated_at" bson:"updated_at"`
+}
+
+type AdminCommentFilter struct {
+	PostID   string `form:"post_id"`
+	AuthorID string `form:"author_id"`
+	Search   string `form:"search"`
+	Cursor   string `form:"cursor"`
+	Limit    int64  `form:"limit"`
+}
+
