@@ -105,6 +105,36 @@ definitions:
       url:
         type: string
     type: object
+  posts.AuthorProfile:
+    properties:
+      avatar_url:
+        type: string
+      bio:
+        type: string
+      created_at:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: string
+      role:
+        type: string
+      total_posts:
+        type: integer
+    type: object
+  posts.AuthorStats:
+    properties:
+      draft_posts:
+        type: integer
+      published_posts:
+        type: integer
+      total_comments:
+        type: integer
+      total_likes:
+        type: integer
+      total_posts:
+        type: integer
+    type: object
   posts.CreatePostRequest:
     properties:
       content:
@@ -136,7 +166,17 @@ definitions:
         type: string
       id:
         type: string
+      is_featured:
+        type: boolean
+      liked_by_me:
+        type: boolean
       likes_count:
+        type: integer
+      previous_slugs:
+        items:
+          type: string
+        type: array
+      read_time:
         type: integer
       slug:
         type: string
@@ -149,6 +189,18 @@ definitions:
       title:
         type: string
       updated_at:
+        type: string
+    type: object
+  posts.SetFeaturedRequest:
+    properties:
+      is_featured:
+        type: boolean
+    type: object
+  posts.TagItem:
+    properties:
+      count:
+        type: integer
+      name:
         type: string
     type: object
   posts.UpdatePostRequest:
@@ -237,21 +289,22 @@ definitions:
     properties:
       email:
         type: string
-      firstName:
-        minLength: 3
+      first_name:
+        minLength: 2
         type: string
-      lastName:
-        minLength: 3
+      last_name:
+        minLength: 2
         type: string
       password:
         minLength: 6
         type: string
       role:
+        description: Server unconditionally creates reader
         type: string
     required:
     - email
-    - firstName
-    - lastName
+    - first_name
+    - last_name
     - password
     type: object
   user.UpdateProfileRequest:
@@ -368,6 +421,55 @@ paths:
       summary: Review an author application
       tags:
       - admin
+  /api/admin/comments:
+    get:
+      description: List all comments across the platform with filtering by post, author,
+        and content search (Admin only)
+      parameters:
+      - description: Filter by Post ID
+        in: query
+        name: post_id
+        type: string
+      - description: Filter by Author ID
+        in: query
+        name: author_id
+        type: string
+      - description: Search content keywords
+        in: query
+        name: search
+        type: string
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: string
+      - description: Limit (default 10, max 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Admin comment moderation listing
+      tags:
+      - admin
   /api/admin/posts:
     get:
       description: Lists all posts across all authors and statuses (Admin role required)
@@ -412,6 +514,89 @@ paths:
       summary: Admin post moderation list
       tags:
       - admin
+  /api/admin/posts/{id}/feature:
+    patch:
+      consumes:
+      - application/json
+      description: Designate a post as the site's featured post (Admin only)
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Featured payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/posts.SetFeaturedRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/posts.Post'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Set or unset post as featured
+      tags:
+      - admin
+  /api/authors/{id}:
+    get:
+      description: Retrieve public profile, bio, avatar, and post statistics for an
+        author
+      parameters:
+      - description: Author User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/posts.AuthorProfile'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Get public author profile
+      tags:
+      - authors
   /api/comments/{id}:
     delete:
       description: Deletes a comment (Comment author, Post author, or Admin)
@@ -521,6 +706,31 @@ paths:
       security:
       - BearerAuth: []
       summary: Author post dashboard
+      tags:
+      - posts
+  /api/my-posts/stats:
+    get:
+      description: Retrieve aggregated totals for posts, published, drafts, likes,
+        and comments
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/posts.AuthorStats'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Get author dashboard statistics
       tags:
       - posts
   /api/posts:
@@ -877,6 +1087,28 @@ paths:
       summary: Toggle like on a post
       tags:
       - posts
+  /api/posts/featured:
+    get:
+      description: Retrieve the currently active featured published post
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/posts.Post'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Get the featured post
+      tags:
+      - posts
   /api/posts/slug/{slug}:
     get:
       description: Fetch post details by slug. Published posts are public; draft posts
@@ -910,6 +1142,26 @@ paths:
       security:
       - BearerAuth: []
       summary: Get a single post by slug
+      tags:
+      - posts
+  /api/tags:
+    get:
+      description: Retrieve all tags used across published posts sorted by usage count
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/posts.TagItem'
+                  type: array
+              type: object
+      summary: Get tags with post counts
       tags:
       - posts
   /auth/login:
@@ -1128,6 +1380,42 @@ paths:
       summary: Submit application to become an author
       tags:
       - author-requests
+  /user/avatar:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload an avatar image up to 2MB (Open to all authenticated users)
+      parameters:
+      - description: Avatar image file (JPEG, PNG, WebP)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/media.UploadResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Upload an avatar image
+      tags:
+      - user
   /user/change-password:
     patch:
       consumes:
