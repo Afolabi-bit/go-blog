@@ -103,6 +103,26 @@ func (m *mockPostRepo) IncrementLikesCount(ctx context.Context, postID primitive
 	return nil
 }
 
+func (m *mockPostRepo) CountPublishedByAuthor(ctx context.Context, authorID primitive.ObjectID) (int64, error) {
+	return 5, nil
+}
+
+func (m *mockPostRepo) GetTags(ctx context.Context) ([]posts.TagItem, error) {
+	return []posts.TagItem{{Name: "golang", Count: 3}}, nil
+}
+
+func (m *mockPostRepo) GetAuthorStats(ctx context.Context, authorID primitive.ObjectID) (posts.AuthorStats, error) {
+	return posts.AuthorStats{TotalPosts: 5, PublishedPosts: 4, DraftPosts: 1, TotalLikes: 10, TotalComments: 2}, nil
+}
+
+func (m *mockPostRepo) SetFeatured(ctx context.Context, postID primitive.ObjectID, isFeatured bool) (posts.Post, error) {
+	return posts.Post{ID: postID, IsFeatured: isFeatured}, nil
+}
+
+func (m *mockPostRepo) GetFeaturedPost(ctx context.Context) (posts.Post, error) {
+	return posts.Post{ID: primitive.NewObjectID(), IsFeatured: true, Status: posts.StatusPublished}, nil
+}
+
 type mockUserRepo struct{}
 
 func (m *mockUserRepo) FinduserByID(ctx context.Context, id string) (user.User, error) {
@@ -312,3 +332,83 @@ func TestDeletePost_Authorization(t *testing.T) {
 		t.Fatalf("expected ErrForbidden for reader deleting post, got: %v", err)
 	}
 }
+
+func TestListPublicPosts_ExcerptAndReadTime(t *testing.T) {
+	longContent := "This is a detailed and insightful technical post about Go programming. " +
+		"It contains enough content to verify that the excerpt generator truncates cleanly " +
+		"without breaking words, and that the reading time calculation computes at least one minute."
+
+	repo := &mockPostRepo{
+		listPublished: func(ctx context.Context, nextCursor string, limit int64, filter posts.PostFilter) ([]posts.Post, error) {
+			return []posts.Post{
+				{
+					ID:      primitive.NewObjectID(),
+					Title:   "Clean Architecture in Go",
+					Content: longContent,
+					Status:  posts.StatusPublished,
+				},
+			}, nil
+		},
+	}
+
+	svc := posts.NewService(repo, &mockUserRepo{})
+	items, meta, err := svc.ListPublicPosts(context.Background(), "", 10, posts.PostFilter{}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+
+	if items[0].ReadTime < 1 {
+		t.Errorf("expected read time >= 1, got %d", items[0].ReadTime)
+	}
+	if items[0].Excerpt == "" {
+		t.Errorf("expected non-empty excerpt")
+	}
+	if meta.Count != 1 {
+		t.Errorf("expected count 1, got %d", meta.Count)
+	}
+}
+
+func TestGetAuthorProfile(t *testing.T) {
+	uID := primitive.NewObjectID()
+	repo := &mockPostRepo{}
+	svc := posts.NewService(repo, &mockUserRepo{})
+
+	profile, err := svc.GetAuthorProfile(context.Background(), uID.Hex())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if profile.ID != uID.Hex() {
+		t.Errorf("expected author id '%s', got '%s'", uID.Hex(), profile.ID)
+	}
+	if profile.TotalPosts != 5 {
+		t.Errorf("expected total posts 5, got %d", profile.TotalPosts)
+	}
+}
+
+func TestSetFeatured_And_GetFeaturedPost(t *testing.T) {
+	postID := primitive.NewObjectID()
+	repo := &mockPostRepo{}
+	svc := posts.NewService(repo, &mockUserRepo{})
+
+	featured, err := svc.SetFeatured(context.Background(), postID.Hex(), true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !featured.IsFeatured {
+		t.Errorf("expected post to be marked featured")
+	}
+
+	got, err := svc.GetFeaturedPost(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got.IsFeatured {
+		t.Errorf("expected featured post")
+	}
+}
+
