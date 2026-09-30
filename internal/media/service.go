@@ -19,7 +19,10 @@ var allowedMimeTypes = map[string]string{
 	"image/gif":  ".gif",
 }
 
-const DefaultMaxFileSize int64 = 5 * 1024 * 1024 // 5MB
+const (
+	DefaultMaxFileSize       int64 = 5 * 1024 * 1024 // 5MB
+	DefaultMaxAvatarFileSize int64 = 2 * 1024 * 1024 // 2MB
+)
 
 type Service struct {
 	storage     Storage
@@ -42,11 +45,23 @@ func NewLocalService(uploadDir string) *Service {
 	return NewService(NewLocalStorage(uploadDir))
 }
 
-// SaveFile validates file size, sniffs MIME type, and saves through the configured storage provider.
+// SaveFile validates file size (max 5MB), sniffs MIME type, and saves through the configured storage provider.
 func (s *Service) SaveFile(ctx context.Context, file multipart.File, header *multipart.FileHeader) (UploadResponse, error) {
 	if header.Size > s.MaxFileSize {
 		return UploadResponse{}, ErrFileTooLarge
 	}
+	return s.saveFileInternal(ctx, file, header)
+}
+
+// SaveAvatar validates avatar file size (max 2MB), sniffs MIME type, and saves through storage provider.
+func (s *Service) SaveAvatar(ctx context.Context, file multipart.File, header *multipart.FileHeader) (UploadResponse, error) {
+	if header.Size > DefaultMaxAvatarFileSize {
+		return UploadResponse{}, ErrFileTooLarge
+	}
+	return s.saveFileInternal(ctx, file, header)
+}
+
+func (s *Service) saveFileInternal(ctx context.Context, file multipart.File, header *multipart.FileHeader) (UploadResponse, error) {
 
 	// Read first 512 bytes to sniff actual MIME type
 	buf := make([]byte, 512)
