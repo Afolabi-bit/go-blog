@@ -57,3 +57,44 @@ func (h *Handler) Upload(c *gin.Context) {
 
 	response.Success(c, http.StatusCreated, "Image uploaded successfully", uploadRes)
 }
+
+// UploadAvatar godoc
+// @Summary      Upload an avatar image
+// @Description  Upload an avatar image up to 2MB (Open to all authenticated users)
+// @Tags         user
+// @Accept       multipart/form-data
+// @Produce      json
+// @Security     BearerAuth
+// @Param        file formData file true "Avatar image file (JPEG, PNG, WebP)"
+// @Success      201  {object} response.Response{data=media.UploadResponse}
+// @Failure      400  {object} response.Response
+// @Failure      401  {object} response.Response
+// @Router       /user/avatar [post]
+func (h *Handler) UploadAvatar(c *gin.Context) {
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		file, header, err = c.Request.FormFile("avatar")
+		if err != nil {
+			file, header, err = c.Request.FormFile("image")
+			if err != nil {
+				response.Error(c, http.StatusBadRequest, "no image file provided (expected 'file', 'avatar', or 'image')")
+				return
+			}
+		}
+	}
+	defer file.Close()
+
+	uploadRes, err := h.svc.SaveAvatar(c.Request.Context(), file, header)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrFileTooLarge), errors.Is(err, ErrInvalidFileType):
+			response.Error(c, http.StatusBadRequest, err.Error())
+		default:
+			response.Error(c, http.StatusInternalServerError, "failed to save uploaded avatar")
+		}
+		return
+	}
+
+	response.Success(c, http.StatusCreated, "Avatar uploaded successfully", uploadRes)
+}
+
