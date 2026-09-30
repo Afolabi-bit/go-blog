@@ -27,7 +27,7 @@ func NewHealthHandler(pinger HealthPinger) gin.HandlerFunc {
 			if err := pinger.Ping(c.Request.Context()); err != nil {
 				c.JSON(http.StatusServiceUnavailable, gin.H{
 					"ok":       false,
-					"service":  "go-blog",
+					"service":  "blog-api",
 					"database": "disconnected",
 					"error":    err.Error(),
 					"time":     time.Now().UTC(),
@@ -38,7 +38,7 @@ func NewHealthHandler(pinger HealthPinger) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"ok":       true,
-			"service":  "go-blog",
+			"service":  "blog-api",
 			"database": dbStatus,
 			"time":     time.Now().UTC(),
 		})
