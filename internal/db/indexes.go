@@ -32,10 +32,21 @@ func EnsureIndexes(ctx context.Context, database *mongo.Database) error {
 	postsColl := database.Collection("posts")
 	_ = deduplicatePostSlugs(inCtx, postsColl)
 
+	// MongoDB allows only one text index per collection; drop v1 if present
+	_, _ = postsColl.Indexes().DropOne(inCtx, "idx_posts_text_search")
+
 	postIndexes := []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "slug", Value: 1}},
 			Options: options.Index().SetUnique(true).SetSparse(true).SetName("idx_posts_slug_unique"),
+		},
+		{
+			Keys:    bson.D{{Key: "previous_slugs", Value: 1}},
+			Options: options.Index().SetSparse(true).SetName("idx_posts_previous_slugs"),
+		},
+		{
+			Keys:    bson.D{{Key: "is_featured", Value: 1}, {Key: "status", Value: 1}},
+			Options: options.Index().SetSparse(true).SetName("idx_posts_featured"),
 		},
 		{
 			Keys:    bson.D{{Key: "status", Value: 1}, {Key: "_id", Value: -1}},
@@ -48,9 +59,14 @@ func EnsureIndexes(ctx context.Context, database *mongo.Database) error {
 		{
 			Keys: bson.D{
 				{Key: "title", Value: "text"},
+				{Key: "tags", Value: "text"},
 				{Key: "content", Value: "text"},
 			},
-			Options: options.Index().SetName("idx_posts_text_search"),
+			Options: options.Index().SetName("idx_posts_text_search_v2").SetWeights(bson.D{
+				{Key: "title", Value: 10},
+				{Key: "tags", Value: 5},
+				{Key: "content", Value: 1},
+			}),
 		},
 	}
 	if _, err := postsColl.Indexes().CreateMany(inCtx, postIndexes); err != nil {
@@ -79,6 +95,10 @@ func EnsureIndexes(ctx context.Context, database *mongo.Database) error {
 		{
 			Keys:    bson.D{{Key: "post_id", Value: 1}, {Key: "created_at", Value: -1}},
 			Options: options.Index().SetName("idx_comments_post_created"),
+		},
+		{
+			Keys:    bson.D{{Key: "post_id", Value: 1}, {Key: "parent_id", Value: 1}, {Key: "_id", Value: -1}},
+			Options: options.Index().SetName("idx_comments_post_parent_id"),
 		},
 	}
 	if _, err := commentsColl.Indexes().CreateMany(inCtx, commentIndexes); err != nil {
