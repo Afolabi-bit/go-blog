@@ -316,3 +316,38 @@ func TestReviewAuthorRequest_AlreadyProcessed(t *testing.T) {
 		t.Fatalf("expected ErrAlreadyProcessed, got: %v", err)
 	}
 }
+
+func TestSubmitAuthorRequest_RejectionCooldown(t *testing.T) {
+	uID := primitive.NewObjectID()
+	userRepoMock := &mockUserRepo{
+		findUserByIDFunc: func(ctx context.Context, id string) (user.User, error) {
+			return user.User{ID: uID, Role: user.RoleReader}, nil
+		},
+	}
+
+	// Recent rejection yesterday (less than 7-day cooldown)
+	repoMock := &mockRepo{
+		findLatestByUserIDFunc: func(ctx context.Context, userID primitive.ObjectID) (authorrequest.AuthorRequest, error) {
+			return authorrequest.AuthorRequest{
+				ID:          primitive.NewObjectID(),
+				UserID:      uID,
+				Status:      authorrequest.StatusRejected,
+				ReviewNotes: "Samples need more technical depth",
+				UpdatedAt:   time.Now().Add(-24 * time.Hour),
+			}, nil
+		},
+	}
+
+	svc := authorrequest.NewService(repoMock, userRepoMock)
+
+	input := authorrequest.SubmitRequest{
+		Bio:        "Aspiring technical writer and developer with 5 years experience.",
+		Motivation: "I want to share tutorials and deep dives with the engineering community.",
+	}
+
+	_, err := svc.Submit(context.Background(), uID.Hex(), input)
+	if err == nil {
+		t.Fatalf("expected error due to active cooldown, got nil")
+	}
+}
+
