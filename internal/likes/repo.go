@@ -70,3 +70,36 @@ func (r *Repo) DeleteLike(ctx context.Context, postID, userID primitive.ObjectID
 
 	return nil
 }
+
+func (r *Repo) FindLikedPostIDs(ctx context.Context, postIDs []primitive.ObjectID, userID primitive.ObjectID) (map[primitive.ObjectID]bool, error) {
+	result := make(map[primitive.ObjectID]bool)
+	if len(postIDs) == 0 {
+		return result, nil
+	}
+
+	inCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	filter := bson.M{
+		"user_id": userID,
+		"post_id": bson.M{"$in": postIDs},
+	}
+
+	cursor, err := r.coll.Find(inCtx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query liked post ids: %w", err)
+	}
+	defer cursor.Close(inCtx)
+
+	var likes []Like
+	if err := cursor.All(inCtx, &likes); err != nil {
+		return nil, fmt.Errorf("failed to decode likes: %w", err)
+	}
+
+	for _, l := range likes {
+		result[l.PostID] = true
+	}
+
+	return result, nil
+}
+
