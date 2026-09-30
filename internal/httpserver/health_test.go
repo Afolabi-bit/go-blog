@@ -41,6 +41,9 @@ func TestHealthCheck_Healthy(t *testing.T) {
 	if body["ok"] != true {
 		t.Errorf("expected ok: true, got %v", body["ok"])
 	}
+	if body["service"] != "blog-api" {
+		t.Errorf("expected service: 'blog-api', got %v", body["service"])
+	}
 	if body["database"] != "connected" {
 		t.Errorf("expected database: 'connected', got %v", body["database"])
 	}
