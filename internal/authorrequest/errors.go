@@ -10,4 +10,5 @@ var (
 	ErrInvalidID        = errors.New("invalid author request id format")
 	ErrAlreadyProcessed = errors.New("author request has already been reviewed")
 	ErrForbidden        = errors.New("permission denied")
+	ErrCooldownActive   = errors.New("reapplication cooldown is active")
 )
